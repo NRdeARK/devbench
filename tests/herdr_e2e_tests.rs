@@ -109,6 +109,15 @@ impl TestEnv {
             .collect()
     }
 
+    /// Tab names of one fake space in order, e.g. `["owner", "worker:web"]`.
+    fn tab_names(&self, space: &str) -> Vec<String> {
+        let v: Value = serde_json::from_str(&fs::read_to_string(&self.fake_state).unwrap()).unwrap();
+        v["spaces"][space]["tabs"]
+            .as_array()
+            .map(|tabs| tabs.iter().map(|t| t["name"].as_str().unwrap().to_string()).collect())
+            .unwrap_or_default()
+    }
+
     fn run(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_devbench"));
         cmd.args(args)
@@ -363,4 +372,54 @@ fn e2e_initiative_multi_track_spawn_tab_labels_status_done_and_archive() {
     assert!(kept.iter().any(|b| b.contains("devbench/ga-v02@")));
     assert!(kept.iter().any(|b| b.contains("api:modes:devbench/ga-v02--modes@")));
     assert!(kept.iter().any(|b| b.contains("web:devbench/ga-v02@")));
+}
+
+#[test]
+fn e2e_spawn_and_resume_leave_only_agent_tabs() {
+    let env = TestEnv::new();
+    assert!(env.run(&["new", "one-tab", "--repos", "api"], &[]).status.success());
+
+    // Spawn owner: the blank "shell" tab is closed, only the owner tab remains.
+    env.clear_log();
+    let sp = env.run(&["spawn", "one-tab", "--role", "owner"], &[]);
+    assert!(sp.status.success(), "{}", String::from_utf8_lossy(&sp.stderr));
+    assert_eq!(env.tab_names("s1"), vec!["owner"]);
+    let log = env.read_log();
+    let close_idx = log
+        .iter()
+        .position(|a| a.len() >= 3 && a[1] == "tab.close" && a[2].contains("\"confirmed\":true"))
+        .expect("tab.close must run");
+    let run_idx = log.iter().position(|a| a[0] == "run").unwrap();
+    assert!(run_idx < close_idx, "agent must be launched before the blank tab is closed");
+
+    // A second terminal reuses the existing space and must not close anything.
+    env.clear_log();
+    let sp_w = env.run(&["spawn", "one-tab", "--role", "worker", "--domain", "web"], &[]);
+    assert!(sp_w.status.success(), "{}", String::from_utf8_lossy(&sp_w.stderr));
+    assert_eq!(env.tab_names("s1"), vec!["owner", "worker:web"]);
+    assert!(!env.read_log().iter().any(|a| a.len() >= 2 && a[1] == "tab.close"));
+
+    // Resume after the whole space and terminals vanished: recreated space ends with one tab.
+    let mut fs_val: Value = serde_json::from_str(&fs::read_to_string(&env.fake_state).unwrap()).unwrap();
+    fs_val["spaces"] = serde_json::json!({});
+    fs_val["terminals"] = serde_json::json!({});
+    fs::write(&env.fake_state, serde_json::to_string_pretty(&fs_val).unwrap()).unwrap();
+    let res = env.run(&["resume", "one-tab", "--key", "owner"], &[]);
+    assert!(res.status.success(), "{}", String::from_utf8_lossy(&res.stderr));
+    assert_eq!(env.tab_names("s2"), vec!["owner"]);
+
+    // Archive after retirement still succeeds (initial terminal no longer tracked).
+    assert!(env.run(&["archive", "one-tab"], &[]).status.success());
+}
+
+#[test]
+fn e2e_tab_close_failure_does_not_fail_spawn() {
+    let env = TestEnv::new();
+    assert!(env.run(&["new", "close-fails", "--repos", "api"], &[]).status.success());
+    env.set_script(serde_json::json!({ "fail_tab_close": true }));
+    let sp = env.run(&["spawn", "close-fails", "--role", "owner"], &[]);
+    assert!(sp.status.success(), "{}", String::from_utf8_lossy(&sp.stderr));
+    assert!(String::from_utf8_lossy(&sp.stderr).contains("could not close blank shell tab"));
+    // Blank tab is left (warned), agent tab still present.
+    assert_eq!(env.tab_names("s1"), vec!["shell", "owner"]);
 }

@@ -192,6 +192,39 @@ impl HerdrClient {
         None
     }
 
+    /// Close a tab via `herdr-app do tab.close {id, confirmed: true}` (ends its terminals).
+    pub fn tab_close(&self, tab_id: &str) -> Result<(), String> {
+        let payload = serde_json::json!({ "id": tab_id, "confirmed": true });
+        let out = run_cmd(&self.app_bin, &["do", "tab.close", &payload.to_string()])?;
+        if let Ok(val) = serde_json::from_str::<Value>(&out) {
+            if let Some(err) = val.get("error").and_then(|v| v.as_str()) {
+                return Err(format!("herdr-app tab.close error: {err}"));
+            }
+        }
+        Ok(())
+    }
+
+    /// Close the blank `shell` tab Herdr creates with a new space, once an agent tab exists.
+    /// Never closes `agent_tab_id` (that would empty the space). Returns `Ok(true)` if a tab was
+    /// closed, `Ok(false)` if there was nothing to close (already gone, or same tab as the agent).
+    pub fn close_initial_tab(
+        &self,
+        space_id: &str,
+        initial_terminal_id: &str,
+        agent_tab_id: &str,
+    ) -> Result<bool, String> {
+        let Some(initial) = self.find_terminal_placement(space_id, initial_terminal_id, "")? else {
+            return Ok(false);
+        };
+        if initial.tab_id == agent_tab_id {
+            return Ok(false);
+        }
+        self.tab_close(&initial.tab_id)?;
+        // tab.close ends the terminal; drop its hc record too (not-found/finished tolerated).
+        let _ = self.hc_kill_and_rm(initial_terminal_id);
+        Ok(true)
+    }
+
     /// Close a 1:1 Herdr workspace via `herdr-app do space.close {id, confirmed: true}`.
     /// Matches the exact `herdr-app commands` schema (`id`, `confirmed`).
     pub fn space_close(&self, space_id: &str) -> Result<(), String> {

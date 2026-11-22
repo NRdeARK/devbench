@@ -2,7 +2,7 @@ use crate::adapters::adapter_for;
 use crate::adapters::codex::{codex_sessions_dir, scan_codex_rollouts};
 use crate::archive::archive_work;
 use crate::config::{check_config, init_config, load_config, resolve_config_path};
-use crate::herdr::{HcGetResult, HerdrClient};
+use crate::herdr::{HcGetResult, HerdrClient, TerminalPlacement};
 use crate::paths::{build_hc_name, sanitize_identifier, sanitize_slug};
 use crate::state::{
     list_works_with_warnings, load_work, mutate_work, save_work, CaptureState, SessionStatus,
@@ -382,6 +382,7 @@ fn cmd_spawn(
 
     // Ensure 1:1 Herdr workspace exists (recreate if missing)
     let mut created_space = false;
+    let mut new_space_initial: Option<String> = None;
     let space_id = match state.herdr_space_id.clone() {
         Some(existing) if herdr.space_exists(&existing).unwrap_or(true) => existing,
         _ => {
@@ -393,6 +394,7 @@ fn cmd_spawn(
             created_space = true;
             let sid = created.space_id.clone();
             let init_tid = created.initial_terminal_id.clone();
+            new_space_initial = init_tid.clone();
             let _ = mutate_work(&slug, |s| {
                 s.herdr_space_id = Some(sid.clone());
                 s.herdr_space_name = Some(slug.clone());
@@ -438,6 +440,8 @@ fn cmd_spawn(
         SessionTier::Worker => format!("worker:{}", clean_domain.as_deref().unwrap_or("worker")),
     };
     let placement = herdr.wait_and_label_tab(&space_id, &hc_info.id, &hc_name, &tab_label);
+    let initial_retired =
+        retire_initial_tab(&herdr, &space_id, new_space_initial.as_deref(), placement.as_ref());
 
     let now = WorkState::now_iso();
     let session = WorkSession {
@@ -461,6 +465,9 @@ fn cmd_spawn(
     let _ = mutate_work(&slug, |s| {
         s.herdr_space_id = Some(space_id.clone());
         s.herdr_space_name = Some(slug.clone());
+        if initial_retired {
+            s.herdr_space_initial_terminal = None;
+        }
         s.upsert_session(session.clone());
         Ok((true, ()))
     })?;
@@ -473,6 +480,27 @@ fn cmd_spawn(
         "screen_preview": screen_preview,
     }))
     .unwrap())
+}
+
+/// Close the blank `shell` tab of a space this command just created, so the space holds only
+/// agent tabs. Only runs when the agent's own tab was located (otherwise closing could empty the
+/// space). Best-effort: a failure is warned about, never fails the launch. Returns true if closed.
+fn retire_initial_tab(
+    herdr: &HerdrClient,
+    space_id: &str,
+    initial_terminal_id: Option<&str>,
+    agent_placement: Option<&TerminalPlacement>,
+) -> bool {
+    let (Some(initial), Some(agent)) = (initial_terminal_id, agent_placement) else {
+        return false;
+    };
+    match herdr.close_initial_tab(space_id, initial, &agent.tab_id) {
+        Ok(closed) => closed,
+        Err(e) => {
+            eprintln!("warning: could not close blank shell tab of space {space_id}: {e}");
+            false
+        }
+    }
 }
 
 fn evaluate_readiness(
@@ -718,6 +746,7 @@ fn cmd_resume(raw_slug: &str, key: &str, explicit_id: Option<&str>) -> Result<St
 
     // Ensure 1:1 Herdr space exists (recreate if manually closed)
     let mut created_space = false;
+    let mut new_space_initial: Option<String> = None;
     let space_id = match state.herdr_space_id.clone() {
         Some(sid) if herdr.space_exists(&sid).unwrap_or(false) => sid,
         _ => {
@@ -729,6 +758,7 @@ fn cmd_resume(raw_slug: &str, key: &str, explicit_id: Option<&str>) -> Result<St
             created_space = true;
             let sid = created.space_id.clone();
             let init_tid = created.initial_terminal_id.clone();
+            new_space_initial = init_tid.clone();
             let _ = mutate_work(&slug, |s| {
                 s.herdr_space_id = Some(sid.clone());
                 s.herdr_space_name = Some(slug.clone());
@@ -765,6 +795,8 @@ fn cmd_resume(raw_slug: &str, key: &str, explicit_id: Option<&str>) -> Result<St
         SessionTier::Worker => format!("worker:{}", session.domain.as_deref().unwrap_or("worker")),
     };
     let placement = herdr.wait_and_label_tab(&space_id, &hc_info.id, &hc_name, &tab_label);
+    let initial_retired =
+        retire_initial_tab(&herdr, &space_id, new_space_initial.as_deref(), placement.as_ref());
 
     let capture_override = if explicit_id.is_some() {
         Some(CaptureState::Manual)
@@ -777,6 +809,9 @@ fn cmd_resume(raw_slug: &str, key: &str, explicit_id: Option<&str>) -> Result<St
     let _ = mutate_work(&slug, |s| {
         s.herdr_space_id = Some(space_id.clone());
         s.herdr_space_name = Some(slug.clone());
+        if initial_retired {
+            s.herdr_space_initial_terminal = None;
+        }
         if let Some(sess) = s.sessions.iter_mut().find(|x| x.key == key) {
             sess.hc_terminal_id = Some(hc_info.id.clone());
             sess.herdr_tab_id = placement.as_ref().map(|p| p.tab_id.clone());

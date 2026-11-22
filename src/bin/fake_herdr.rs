@@ -221,6 +221,40 @@ fn handle_app_do(args: &[String], script: &Value, state: &mut FakeState) -> Exit
             eprintln!("{{\"error\":\"tab not found\"}}");
             ExitCode::from(1)
         }
+        "tab.close" => {
+            for k in obj.keys() {
+                if !matches!(k.as_str(), "id" | "confirmed") {
+                    eprintln!("{{\"error\":\"unknown argument '{k}' for tab.close\"}}");
+                    return ExitCode::from(1);
+                }
+            }
+            let Some(id) = obj.get("id").and_then(|v| v.as_str()) else {
+                eprintln!("{{\"error\":\"missing required argument 'id'\"}}");
+                return ExitCode::from(1);
+            };
+            if script.get("fail_tab_close").and_then(|v| v.as_bool()) == Some(true) {
+                eprintln!("{{\"error\":\"tab not found\"}}");
+                return ExitCode::from(1);
+            }
+            let found = state
+                .spaces
+                .iter()
+                .find(|(_, sp)| sp.tabs.iter().any(|t| t.id == id))
+                .map(|(sid, _)| sid.clone());
+            let Some(sid) = found else {
+                eprintln!("{{\"error\":\"tab not found\"}}");
+                return ExitCode::from(1);
+            };
+            let space = state.spaces.get_mut(&sid).unwrap();
+            space.tabs.retain(|t| t.id != id);
+            // Like the real app: closing a space's last tab closes the space.
+            if space.tabs.is_empty() {
+                state.spaces.remove(&sid);
+            }
+            save_state(state);
+            println!("{}", json!({"closed": id}));
+            ExitCode::SUCCESS
+        }
         "space.close" => {
             // Strict schema matching real `herdr-app commands`: ONLY `id` and `confirmed`!
             for k in obj.keys() {
