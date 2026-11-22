@@ -1,6 +1,6 @@
 {
   "skill_name": "devbench",
-  "goal": "Prove the slimmed devbench Dispatcher skill still gathers state first, never forces past trust prompts or dirty worktrees, and routes a parallel same-repo track correctly.",
+  "goal": "Prove the slimmed devbench Dispatcher skill still gathers state first, never forces past trust prompts or dirty worktrees, and routes same-repo work by initiative membership (--track within an active initiative vs devbench new for an unrelated initiative).",
   "reference": "old",
   "evals": [
     {
@@ -37,17 +37,18 @@
     },
     {
       "id": 3,
-      "behavior": "Sizing: a parallel, separate-PR change in the same repo of an active initiative is a new track in the same work, not a new work",
+      "behavior": "Sizing: routes a parallel separate-PR track within an active initiative to --track, and an unrelated initiative or standalone hotfix in the same repo to devbench new",
       "regression": false,
       "variants": {
-        "full": "Work auth-overhaul is already active with repo api and an owner running. I now also want a separate PR in the same api repo that adds rate limiting, in parallel with what the owner is doing. As the dispatcher, write outputs/plan.md with the exact devbench command you would run (as a JSON argv array, e.g. [\"git\",\"status\"]) and a one-line reason. You cannot run it here.",
-        "short": "auth-overhaul active, api repo, owner busy. want parallel separate PR in same api repo: rate limiting. outputs/plan.md = devbench cmd as JSON argv array e.g. [\"git\",\"status\"] + 1 line why",
-        "thai_typo": "work auth-overhaul ยัง active อยู่ มี repo api และ owner กำลังทำอยู่ ตอนนี้อยากได้ PR แยกอีกอันใน repo api เดียวกัน ทำ rate limiting ขนานกันไปเลย ในฐานะ dispatcher เขียน outputs/plan.md ว่าจะรัน devbench คำสั่งอะไร (เปน JSON argv array เช่น [\"git\",\"status\"]) พร้อมเหตุผลบรรทัดเดียว รันจริงไม่ได้"
+        "full": "Work auth-overhaul is already active with repo api and an owner running. I have two new requests in the same api repo, both needing separate PRs: (A) auth rate limiting that is part of the auth-overhaul initiative (ships and archives with auth-overhaul), done in parallel with what the owner is doing; and (B) an unrelated standalone hotfix for a broken billing invoice webhook in the same api repo that archives on its own timeline. As the dispatcher, write outputs/plan.md with two labeled sections (A and B), each containing the exact devbench command you would run (as a JSON argv array, e.g. [\"git\",\"status\"]) and a one-line reason. You cannot run commands here.",
+        "short": "auth-overhaul active, api repo, owner busy. 2 separate-PR requests in same api repo: (A) auth rate limiting, part of auth-overhaul initiative, parallel w/ owner; (B) unrelated standalone billing invoice hotfix, own timeline/archive. outputs/plan.md: sections A and B, each = devbench cmd (JSON argv array e.g. [\"git\",\"status\"]) + 1 line why. cant run cmds",
+        "thai_typo": "work auth-overhaul ยัง active อยู่ มี repo api และ owner กำลังทำอยู่ ตอนนี้มี 2 งานใน repo api เดียวกัน ที่ต้องเปิด PR แยกทั้งคู่: (A) ทำ auth rate limiting ซึ้งเปนส่วนหนึ่งของ initiative auth-overhaul (จะ ship และ archive ไปพร้อมกัน) ทำขนานกับ owner เลย; (B) hotfix แยกเดี่ยวแก้บั๊ก billing invoice webhook ใน repo api เดียวกันที่ไม่เกี่ยวกับ auth-overhaul และจะ archive ตามไทม์ไลน์ของมันเอง ในฐานะ dispatcher เขียน outputs/plan.md แยกหัวข้อ A กับ B แต่ละข้อใส่คำสั่ง devbench ที่จะรัน (เปน JSON argv array เช่น [\"git\",\"status\"]) พร้อมเหตุผลบรรทัดเดียว รันจริงไม่ได้"
       },
       "assertions": [
-        "The planned command is devbench spawn for slug auth-overhaul with a --track option (e.g. rate-limiting) and --cwd-repo api",
-        "The plan does not run devbench new, and does not create a second work or Herdr space for this change",
-        "The plan does not put the second editor into the same worktree as the running owner (it uses an isolated track, not a plain --domain worker on the existing worktree)"
+        "For request A (auth rate limiting as part of auth-overhaul), the planned command is devbench spawn for slug auth-overhaul with a --track option (e.g. rate-limiting) and --cwd-repo api",
+        "For request A, the plan does not run devbench new, does not create a second work or Herdr space, and does not put the second editor into the same worktree as the running owner (uses an isolated --track, not a plain --domain worker on the existing worktree)",
+        "For request B (the unrelated standalone billing hotfix in api), the planned command is devbench new with a new work slug and --repos api",
+        "For request B, the plan does not attach it to auth-overhaul (does not use --track on auth-overhaul, devbench spawn auth-overhaul, or devbench add-track auth-overhaul)"
       ]
     },
     {
