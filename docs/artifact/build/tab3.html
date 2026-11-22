@@ -1,0 +1,1209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>devbench · 3 Concepts</title>
+<style>
+@import url("https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Sans+Thai:wght@400;500;600&family=Noto+Serif+Thai:wght@500;600&display=swap");
+
+/* Theme: Anthropic. Tokens only; structure lives in templates/base.css. */
+:root {
+  color-scheme: light;
+
+  /* surface */
+  --bg: #FAF9F5;
+  --surface: #FFFFFF;
+  --surface-alt: #F0EEE6;
+  --fg: #141413;
+  --fg-muted: #5E5D59;
+  --border: #E3DFD3;
+  --accent: #D97757;
+  --accent-fg: #FFFFFF;
+  --link: #B5522F;
+  --shadow: 0 1px 2px rgba(20, 20, 19, 0.08);
+  --sticky-shadow: rgba(20, 20, 19, 0.28);
+
+  /* tab bar */
+  --tab-bg: #F0EEE6;
+  --tab-fg: #141413;
+  --tab-hover-bg: #E6E2D6;
+  --tab-num-bg: #FFFFFF;
+  --tab-active-bg: #D97757;
+  --tab-active-fg: #141413;
+  --tab-disabled-fg: #8A8880;
+  --focus-ring: #1F6FA8;
+
+  /* diagram viewer */
+  --viewer-bg: rgba(20, 20, 19, 0.94);
+  --viewer-fg: #FAF9F5;
+  --viewer-btn-bg: #3D3D3A;
+  --viewer-btn-bd: #5E5D59;
+
+  /* type: Latin face first, Thai face as fallback so both scripts render */
+  --font-display: "Source Serif 4", "Noto Serif Thai", Georgia, "Times New Roman", serif;
+  --font-body: "Inter", "IBM Plex Sans Thai", "Noto Sans Thai", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  /* status: differ in lightness and border style, not hue alone */
+  --unchanged-bg: #EFEDE6;
+  --unchanged-bd: #B0AEA5;
+  --unchanged-fg: #3D3D3A;
+  --changed-bg: #FBE3B0;
+  --changed-bd: #B87800;
+  --changed-fg: #5C3A00;
+  --new-bg: #CFE4F5;
+  --new-bd: #1F6FA8;
+  --new-fg: #0B3D63;
+  --removed-bg: #F3EEEE;
+  --removed-bd: #8A5A5A;
+  --removed-fg: #5A2E2E;
+  --deferred-bg: #E1DEF7;
+  --deferred-bd: #5B54B0;
+  --deferred-fg: #2B2672;
+  --chosen-bg: #141413;
+  --chosen-bd: #141413;
+  --chosen-fg: #FAF9F5;
+  --open-bg: #FBE3B0;
+  --open-bd: #B87800;
+  --open-fg: #5C3A00;
+  --rejected-bg: #F3EEEE;
+  --rejected-bd: #8A5A5A;
+  --rejected-fg: #5A2E2E;
+}
+
+/* Structure only. Every color and font comes from a theme file. */
+* { box-sizing: border-box; }
+body { overflow-x: clip; margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 14px; line-height: 1.55; }
+h1, h2, h3 { font-family: var(--font-display); margin: 0; line-height: 1.25; }
+a { color: var(--link); }
+code { font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }
+svg, img { max-width: 100%; }
+.card, .brand, .main-col, main > *, .split > * { min-width: 0; }
+.card p, .card li, .side a, .tab-label, h1, h2, h3, td { overflow-wrap: anywhere; }
+p { margin: 6px 0; }
+ul { margin: 6px 0; padding-left: 20px; }
+[hidden] { display: none !important; }
+
+/* language: both languages are embedded, CSS shows one */
+html[lang="th"] [data-l="en"], html[lang="en"] [data-l="th"] { display: none; }
+
+.top { position: sticky; top: 0; z-index: 10; transition: transform 0.2s ease; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 24px; padding: 10px 32px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.brand { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.project { font-family: var(--font-display); font-size: 20px; }
+.nav { display: flex; align-items: center; gap: 8px; overflow-x: auto; padding: 4px 2px; }
+.nav-group { display: flex; align-items: center; gap: 6px; }
+.nav-group-label { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-muted); padding: 0 4px; }
+.nav-divider { align-self: stretch; width: 1px; margin: 0 6px; background: var(--border); }
+.tab { display: inline-flex; align-items: center; gap: 8px; padding: 5px 14px 5px 5px; border-radius: 999px; border: 1px solid transparent; background: var(--tab-bg); color: var(--tab-fg); font-size: 13px; text-decoration: none; white-space: nowrap; }
+a.tab:hover { background: var(--tab-hover-bg); }
+.tab:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.tab-num { display: inline-grid; place-items: center; min-width: 22px; height: 22px; border-radius: 999px; background: var(--tab-num-bg); font-size: 11px; font-weight: 600; }
+.tab.current { background: var(--tab-active-bg); color: var(--tab-active-fg); font-weight: 600; }
+.tab.disabled { background: none; border: 1px dashed var(--border); color: var(--tab-disabled-fg); cursor: not-allowed; }
+.tab.disabled .tab-num { background: none; border: 1px solid var(--border); }
+.tab-lock { flex: none; }
+.lang { display: flex; gap: 0; }
+.lang button { font: inherit; font-size: 12px; padding: 4px 10px; border: 1px solid var(--border); background: var(--surface); color: var(--fg); cursor: pointer; }
+html[lang="en"] [data-set-lang="en"], html[lang="th"] [data-set-lang="th"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+
+main { padding: 20px 32px 32px; display: flex; flex-direction: column; gap: 16px; max-width: 1280px; margin: 0 auto; }
+footer { padding: 16px 32px; border-top: 1px solid var(--border); color: var(--fg-muted); font-size: 12px; }
+
+.card { border: 1px solid var(--border); border-radius: 8px; padding: 16px; background: var(--surface); box-shadow: var(--shadow); }
+.card.emphasis { border: 2px solid var(--fg); }
+.lbl { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-muted); }
+.muted, .note { color: var(--fg-muted); font-size: 12px; }
+.pill { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; padding: 2px 8px; border-radius: 4px; background: var(--surface-alt); color: var(--fg); }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+.grid3 { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 14px; }
+.grid3 > * { min-width: 0; }
+.stack { display: flex; flex-direction: column; gap: 10px; }
+.row-between { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+
+.table-wrap { overflow-x: auto; max-width: 100%; margin-top: 6px; }
+.table-wrap > table { min-width: 36rem; margin-top: 0; }
+table { border-collapse: collapse; width: 100%; font-size: 12px; margin-top: 6px; }
+td, th { border: 1px solid var(--border); padding: 6px 8px; text-align: left; vertical-align: top; }
+th { background: var(--surface-alt); font-weight: 600; }
+td.gap { background: var(--changed-bg); color: var(--changed-fg); font-weight: 600; }
+td.na { color: var(--fg-muted); }
+.ref { white-space: nowrap; }
+
+details > summary { cursor: pointer; font-weight: 600; }
+details.card > summary { list-style-position: inside; }
+
+/* diagrams */
+.expand { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--fg); cursor: pointer; opacity: 0.85; }
+.expand:hover, .expand:focus-visible { opacity: 1; background: var(--tab-hover-bg); }
+.expand:focus-visible, .viewer-tools button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+/* diagram viewer overlay (built into the page: works in a sandboxed frame) */
+.viewer { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; background: var(--viewer-bg); color: var(--viewer-fg); }
+.viewer-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 10px 16px; }
+.viewer-caption { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.viewer-tools { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.viewer-tools button { min-width: 36px; height: 32px; padding: 0 10px; border: 1px solid var(--viewer-btn-bd); border-radius: 6px; background: var(--viewer-btn-bg); color: var(--viewer-fg); font: inherit; cursor: pointer; }
+html.viewer-open { overflow: hidden; }
+.diagram.missing { border: 1px dashed var(--fg-muted); border-radius: 6px; background: var(--surface-alt); color: var(--fg-muted); padding: 24px 12px; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+
+/* status vocabulary: unchanged / changed / new / removed / deferred (+ decision states) */
+.box { border: 2px solid var(--unchanged-bd); background: var(--unchanged-bg); color: var(--unchanged-fg); border-radius: 6px; padding: 8px 10px; font-size: 12px; text-align: center; }
+.box small { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+.changed { border-color: var(--changed-bd); background: var(--changed-bg); color: var(--changed-fg); }
+.new { border-color: var(--new-bd); background: var(--new-bg); color: var(--new-fg); }
+.removed { border-color: var(--removed-bd); background: var(--removed-bg); color: var(--removed-fg); border-style: dashed; text-decoration: line-through; }
+.deferred { border-color: var(--deferred-bd); background: var(--deferred-bg); color: var(--deferred-fg); border-style: dashed; }
+.chosen { border-color: var(--chosen-bd); background: var(--chosen-bg); color: var(--chosen-fg); }
+.open { border-color: var(--open-bd); background: var(--open-bg); color: var(--open-fg); }
+.rejected { border-color: var(--rejected-bd); background: var(--rejected-bg); color: var(--rejected-fg); border-style: dashed; }
+.unchanged { border-color: var(--unchanged-bd); background: var(--unchanged-bg); color: var(--unchanged-fg); }
+.badge { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; border: 1px solid; }
+
+/* before / after */
+.ba { display: flex; flex-direction: column; gap: 10px; }
+.level-btns { display: flex; gap: 6px; }
+.level-btns button, .tog { font: inherit; font-size: 12px; padding: 5px 10px; border: 1px solid var(--border); background: var(--surface); color: var(--fg); border-radius: 4px; cursor: pointer; }
+.level-btns button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+
+/* tab 1 */
+.banner { border: 2px solid var(--fg); border-radius: 6px; padding: 10px 16px; margin: 8px 0; background: var(--surface); }
+.banner p { margin: 2px 0 0; font-family: var(--font-display); font-size: 18px; }
+.pill.main { background: var(--chosen-bg); color: var(--chosen-fg); }
+.pill.affected { background: var(--surface); color: var(--changed-fg); border: 1px dashed var(--changed-bd); }
+.uc-table td:nth-child(1), .uc-table td:nth-child(2), .uc-table td:nth-child(5) { white-space: nowrap; }
+
+/* tab 2 */
+.decision > summary { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.decision.open-state { border: 2px solid var(--open-bd); }
+.opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin: 10px 0; }
+.opt { border: 1px solid var(--border); border-radius: 6px; padding: 12px; font-size: 12px; display: flex; flex-direction: column; gap: 4px; background: var(--surface); }
+.opt.rejected, .opt.deferred { border-style: dashed; }
+.opt dl { margin: 0; }
+.opt dt { font-weight: 600; display: inline; }
+.opt dd { display: inline; margin: 0; }
+.opt .fact { margin: 2px 0; }
+.opt-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+
+/* tab 3 */
+
+/* tab 4 */
+.split { display: flex; gap: 0; align-items: flex-start; }
+.side { width: 220px; flex: none; position: sticky; top: calc(var(--header-h, 0px) + 12px); max-height: calc(100vh - var(--header-h, 0px) - 24px); overflow-y: auto; border-right: 1px solid var(--border); background: var(--surface); padding: 16px; display: flex; flex-direction: column; gap: 4px; }
+.side a { text-decoration: none; color: var(--fg); padding: 4px 6px; border-radius: 4px; }
+.side a:hover, .side a.active { background: var(--surface-alt); }
+.side a.active { font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); }
+.side-sub { display: block; font-size: 11px; font-weight: 400; color: var(--fg-muted); line-height: 1.4; }
+.uc, .blk { scroll-margin-top: calc(var(--header-h, 0px) + 12px); }
+.main-col { flex: 1; min-width: 0; padding-left: 24px; display: flex; flex-direction: column; gap: 32px; }
+.uc { display: flex; flex-direction: column; gap: 14px; }
+.uc h2 { font-size: 22px; }
+.uc-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+.toggles { display: flex; gap: 8px; align-items: flex-start; }
+.tog.bad { border-color: var(--changed-bd); }
+.tog.edge { border-color: var(--new-bd); }
+.legend-list { font-size: 12px; line-height: 1.9; }
+
+/* tab 5 */
+.comp { border-left: 4px solid var(--unchanged-bd); }
+.comp.changed { border-left-color: var(--changed-bd); background: var(--surface); color: var(--fg); }
+.comp.new { border-left-color: var(--new-bd); background: var(--surface); color: var(--fg); }
+.comp.removed { border-left-color: var(--removed-bd); background: var(--surface); color: var(--fg); text-decoration: none; }
+.comp.removed > summary strong { text-decoration: line-through; color: var(--removed-fg); }
+.comp-body { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
+
+/* print / PDF */
+.print-cover { min-height: 90vh; display: flex; flex-direction: column; justify-content: center; gap: 12px; padding: 0 32px; }
+.print-cover h1 { font-size: 44px; }
+.print-page { break-before: page; }
+.print-page > h1 { font-size: 26px; padding: 16px 32px 0; }
+body.print .toggles, body.print .lang, body.print .level-btns, body.print .expand-both { display: none; }
+body.print .side { display: none; }
+body.print .main-col { padding-left: 0; }
+@media print { body { background: var(--surface); } .card { box-shadow: none; break-inside: avoid; } .expand, .expand-both, .viewer { display: none !important; } }
+body.print .expand, body.print .viewer { display: none; }
+.files { list-style: none; padding-left: 0; }
+.files li { margin: 4px 0; }
+.file-removed code { text-decoration: line-through; }
+.dict { margin: 8px 0; }
+.dict > summary { cursor: pointer; }
+.nowrap { white-space: nowrap; }
+.dict-cols td { vertical-align: top; }
+@media (max-width: 760px) {
+  .blk, .grid3 { grid-template-columns: minmax(0, 1fr); }
+  .split { flex-direction: column; }
+  .side { width: 100%; position: static; border-right: 0; }
+  .main-col { padding-left: 0; }
+  .top, main, footer { padding-left: 16px; padding-right: 16px; }
+  .nav { order: 3; flex-basis: 100%; }
+}
+
+/* diagrams are inline SVG: crisp, selectable, shown at their natural width up to the column width */
+.diagram { margin: 8px 0; }
+.diagram-frame { position: relative; display: block; margin: 0 auto; width: 100%; }
+.diagram-frame > svg { display: block; width: 100%; height: auto; cursor: zoom-in; }
+.extra { margin-top: 12px; }
+
+/* before / after pairs: side by side on wide screens, stacked below 1100px */
+.ba-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.pair-side { min-width: 0; }
+.expand-both { grid-column: 1 / -1; justify-self: end; font: inherit; font-size: 12px; padding: 5px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--fg); cursor: pointer; }
+.expand-both:hover, .expand-both:focus-visible { background: var(--tab-hover-bg); outline: none; }
+.expand-both:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+@media (max-width: 1500px) { .ba-cols { grid-template-columns: 1fr; } }
+
+/* concept blocks: header, then the diagram at full column width, then text in a readable measure */
+.blk { display: flex; flex-direction: column; gap: 12px; }
+.blk h2 { font-size: 20px; }
+.blk .kind { font-family: var(--font-body); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 8px; border-radius: 4px; background: var(--surface-alt); color: var(--fg-muted); vertical-align: middle; }
+.oneline { margin: 8px 0 0; }
+.oneline .lbl { display: block; }
+.oneline { font-family: var(--font-display); font-size: 24px; line-height: 1.35; }
+.plain-card { display: grid; gap: 0; margin: 10px 0; max-width: 70ch; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-alt); }
+.plain-card > div { display: grid; grid-template-columns: 8.5rem 1fr; gap: 12px; padding: 8px 12px; }
+.plain-card > div + div { border-top: 1px solid var(--border); }
+.plain-card dt { font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--fg-muted); }
+.plain-card dd { margin: 0; }
+.analogy { margin: 6px 0 0; max-width: 70ch; color: var(--fg-muted); font-style: italic; }
+.analogy strong { font-style: normal; color: var(--fg); }
+.blk .tx { display: flex; flex-direction: column; gap: 6px; max-width: 70ch; }
+
+/* decision option cards: normal text on a surface card; only the border and the badge carry the state */
+.opt.chosen, .opt.open, .opt.deferred, .opt.rejected { background: var(--surface); color: var(--fg); }
+.opt.chosen { border: 2px solid var(--chosen-bd); }
+.opt.open { border-color: var(--open-bd); }
+.opt.deferred { border-color: var(--deferred-bd); border-style: dashed; }
+.opt.rejected { border-color: var(--rejected-bd); border-style: dashed; }
+
+/* UC diagram toggles */
+.frag-chips { margin: 6px 0; }
+.tog[aria-pressed="false"] .on-hide, .tog[aria-pressed="true"] .on-show { display: none; }
+.tog[aria-pressed="true"] { background: var(--surface-alt); font-weight: 600; }
+.tog.small { padding: 3px 9px; }
+
+/* viewer panes (single, or two for before/after compare) */
+.viewer-panes { flex: 1; display: flex; min-height: 0; }
+.viewer-pane { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.viewer-pane + .viewer-pane { border-left: 1px solid var(--viewer-btn-bd); }
+.pane-label { padding: 4px 16px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+.viewer-stage { position: relative; flex: 1; overflow: hidden; touch-action: none; cursor: grab; user-select: none; }
+.viewer-stage.grabbing { cursor: grabbing; }
+.viewer-img { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.viewer-tools button[aria-pressed="true"] { background: var(--viewer-fg); color: var(--viewer-bg); }
+.viewer-panes[data-layout="stack"] { flex-direction: column; }
+.viewer-panes[data-layout="stack"] .viewer-pane + .viewer-pane { border-left: 0; border-top: 1px solid var(--viewer-btn-bd); }
+.layout-seg { display: inline-flex; }
+.layout-seg button { border-radius: 0; }
+.layout-seg button:first-child { border-radius: 6px 0 0 6px; }
+.layout-seg button:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
+
+/* tables: always in a scroll box; the key ones also have a flipped view and compact item cards for narrow screens */
+.tbl-flip { display: none; }
+.item-cards { display: none; }
+.view-toggle { display: none; }
+.swipe-hint { display: none; }
+.ref-id { white-space: nowrap; }
+.uc-link { text-decoration: none; color: var(--fg); }
+a.uc-link .ref-id { color: var(--link); text-decoration: underline; }
+.item-type { color: var(--fg-muted); }
+@media (max-width: 640px) {
+  /* flipped view (default on phones): fields down a sticky first column, one item per column, swipe sideways */
+  .view-toggle { display: inline-flex; margin-bottom: 6px; }
+  .view-toggle button { font: inherit; font-size: 12px; padding: 4px 12px; border: 1px solid var(--border); background: var(--surface); color: var(--fg); cursor: pointer; }
+  .view-toggle button:first-child { border-radius: 6px 0 0 6px; }
+  .view-toggle button:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
+  .view-toggle button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  .tbl-normal { display: none; }
+  .tbl-flip { display: block; position: relative; }
+  html[data-table-view="cards"] .item-cards { display: block; }
+  html[data-table-view="cards"] .tbl-flip { display: none; }
+  .item-card { border: 1px solid var(--border); border-radius: 6px; margin: 8px 0; padding: 10px 12px; background: var(--surface); }
+  .item-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+  .item-title { font-weight: 600; }
+  .item-badge { margin-left: auto; }
+  .item-body { margin: 6px 0 0; }
+  .item-line { margin: 6px 0 0; }
+  .item-label { display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--fg-muted); }
+  .item-foot { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--border); font-size: 12px; color: var(--fg-muted); }
+  .flip-scroll { scroll-snap-type: x mandatory; scroll-padding-left: 6.25rem; }
+  .table-wrap > table.flip { min-width: 0; width: max-content; }
+  table.flip th[scope="col"] { min-width: 9rem; vertical-align: bottom; background: var(--surface-alt); font-size: 13px; }
+  table.flip th.flip-corner { position: sticky; left: 0; z-index: 2; width: 6.25rem; min-width: 6.25rem; background: var(--surface-alt); }
+  table.flip th[scope="row"] { position: sticky; left: 0; z-index: 1; width: 6.25rem; min-width: 6.25rem; max-width: 6.25rem; background: var(--surface-alt); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+  table.flip td { width: calc(100vw - 4rem - 6.25rem - 2.5rem); min-width: 9rem; scroll-snap-align: start; vertical-align: top; background: var(--surface); }
+  .tbl-flip::after { content: ""; position: absolute; top: 0; right: 0; bottom: 0; width: 2.5rem; background: linear-gradient(to right, transparent, var(--surface)); pointer-events: none; transition: opacity 0.2s; }
+  .swipe-hint { display: block; position: absolute; right: 0.4rem; bottom: 0.3rem; z-index: 2; font-size: 11px; color: var(--fg-muted); background: var(--surface); padding: 2px 6px; border-radius: 4px; transition: opacity 0.2s; }
+  .tbl-flip.scrolled .swipe-hint, .tbl-flip.at-end .swipe-hint, .tbl-flip.at-end::after { opacity: 0; }
+}
+/* flipped table: the sticky label column must fully cover whatever scrolls under it (no gaps, borders as shadows) */
+@media (max-width: 640px) {
+  table.flip { border-collapse: separate; border-spacing: 0; }
+  .flip-scroll { padding: 0; margin: 0; }
+  table.flip th, table.flip td { border: 0; border-bottom: 1px solid var(--border); }
+  table.flip td { position: relative; z-index: 1; border-right: 1px solid var(--border); }
+  table.flip th[scope="col"] { position: relative; z-index: 1; border-right: 1px solid var(--border); }
+  table.flip th[scope="row"], table.flip th.flip-corner { position: sticky; left: -2px; padding-left: 10px; z-index: 3; background-color: var(--surface-alt); background-clip: border-box; box-shadow: inset -2px 0 0 var(--unchanged-bd), 6px 0 8px -4px var(--sticky-shadow); }
+  table.flip th[scope="row"]::before, table.flip th.flip-corner::before { content: ""; position: absolute; top: 0; bottom: 0; left: -8px; width: 8px; background: inherit; }
+}
+
+body.print .tbl-flip, body.print .item-cards, body.print .view-toggle { display: none !important; }
+body.print .tbl-normal { display: block !important; }
+
+/* the top bar slides away while scrolling down and returns on any upward scroll, focus inside it, or near the top */
+.top.is-hidden { transform: translateY(-100%); }
+.top:focus-within { transform: none; }
+.side { transition: top 0.2s ease; }
+@media (prefers-reduced-motion: reduce) { .top, .side { transition: none; } }
+
+/* CRUD matrix cells: n/a reasons muted, gaps highlighted in every view */
+.na-reason { color: var(--fg-muted); font-style: italic; }
+.item-line.gap { background: var(--changed-bg); color: var(--changed-fg); border-radius: 4px; padding: 4px 8px; }
+.item-line.gap .item-label { color: var(--changed-fg); }
+table.flip td.gap { background: var(--changed-bg); color: var(--changed-fg); }
+
+/* CRUD cards: label and value share one compact line */
+.tblset-crud-table .item-line { padding-left: 5.25rem; text-indent: -5.25rem; }
+.tblset-crud-table .item-line.gap { padding-left: calc(5.25rem + 8px); text-indent: -5.25rem; }
+.tblset-crud-table .item-label { display: inline-block; width: 4.75rem; margin-right: 0.5rem; text-indent: 0; }
+.tblset-crud-table .item-line * { text-indent: 0; }
+
+/* sequence legend: what this use case adds or changes (text marker + colour) */
+.seq-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 4px 0 8px; font-size: 12px; color: var(--fg-muted); }
+.seq-legend .lg { display: inline-flex; align-items: center; gap: 6px; }
+.seq-legend i { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 2px; border: 1px solid var(--unchanged-bd); background: var(--unchanged-bg); color: var(--unchanged-fg); font: 700 12px/1 ui-monospace, Consolas, monospace; font-style: normal; }
+.seq-legend .lg-added i { background: var(--new-bg); border-color: var(--new-bd); color: var(--new-fg); }
+.seq-legend .lg-changed i { background: var(--changed-bg); border-color: var(--changed-bd); color: var(--changed-fg); }
+.viewer-legend { display: inline-flex; flex-wrap: wrap; gap: 4px 12px; }
+.viewer-legend .lg { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.viewer-legend i { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 2px; border: 1px solid var(--unchanged-bd); background: var(--unchanged-bg); color: var(--unchanged-fg); font: 700 12px/1 ui-monospace, Consolas, monospace; font-style: normal; }
+.viewer-legend .lg-added i { background: var(--new-bg); border-color: var(--new-bd); color: var(--new-fg); }
+.viewer-legend .lg-changed i { background: var(--changed-bg); border-color: var(--changed-bd); color: var(--changed-fg); }
+
+</style>
+<script>(function () {
+  var KEY = "ga-lang";
+  var doc = document.documentElement;
+  try {
+    var saved = localStorage.getItem(KEY);
+    if (saved === "en" || saved === "th") doc.lang = saved;
+  } catch (e) { /* storage blocked: keep the page default */ }
+
+  function showLevel(root, level) {
+    root.querySelectorAll("[data-level]").forEach(function (box) { box.hidden = box.dataset.level !== level; });
+    root.querySelectorAll("[data-level-btn]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.levelBtn === level)); });
+  }
+
+  /* ---- sequence diagrams: alt fragments shown or hidden in place, the diagram reflows ---- */
+  function isShown(el) { return el.getAttribute("display") !== "none"; }
+
+  function reflow(svg) {
+    var cursor = +svg.dataset.top;
+    svg.querySelectorAll("[data-block]").forEach(function (b) {
+      if (!isShown(b)) return;
+      b.setAttribute("transform", "translate(0," + (cursor - +b.dataset.y) + ")");
+      cursor += +b.dataset.h;
+    });
+    svg.querySelectorAll("[data-lifeline]").forEach(function (l) { l.setAttribute("y2", cursor); });
+    var legend = svg.querySelector("[data-legend]");
+    var legendTop = cursor + 40;
+    if (legend) legend.setAttribute("transform", "translate(0," + (legendTop - +legend.dataset.y) + ")");
+    svg.setAttribute("viewBox", "0 0 " + svg.dataset.w + " " + (legendTop + +svg.dataset.legendH));
+  }
+
+  function refreshToggles(svg) {
+    document.querySelectorAll('[data-target="' + svg.id + '"]').forEach(function (btn) {
+      if (btn.dataset.fragment) {
+        var f = svg.querySelector('[data-fragment="' + btn.dataset.fragment + '"]');
+        btn.setAttribute("aria-pressed", String(!!f && isShown(f)));
+      } else if (btn.dataset.kind) {
+        var all = Array.prototype.slice.call(svg.querySelectorAll('[data-fragment][data-kind="' + btn.dataset.kind + '"]'));
+        btn.setAttribute("aria-pressed", String(all.length > 0 && all.every(isShown)));
+      }
+    });
+  }
+
+  function toggleFragments(btn) {
+    var svg = document.getElementById(btn.dataset.target);
+    if (!svg) return;
+    var frags;
+    if (btn.dataset.fragment) {
+      frags = [svg.querySelector('[data-fragment="' + btn.dataset.fragment + '"]')];
+    } else {
+      frags = Array.prototype.slice.call(svg.querySelectorAll('[data-fragment][data-kind="' + btn.dataset.kind + '"]'));
+    }
+    frags = frags.filter(Boolean);
+    var show = !frags.every(isShown);
+    frags.forEach(function (f) { if (show) f.removeAttribute("display"); else f.setAttribute("display", "none"); });
+    reflow(svg);
+    refreshToggles(svg);
+  }
+
+  function expandAllFragments() {
+    document.querySelectorAll("svg[data-reflow]").forEach(function (svg) {
+      svg.querySelectorAll("[data-fragment]").forEach(function (f) { f.removeAttribute("display"); });
+      reflow(svg);
+    });
+  }
+
+  /* ---- diagram viewer: in-page overlay, one pane or two (compare), wheel/pinch zoom, drag to pan.
+         No popups, no Fullscreen API (claude.ai pages run in a sandboxed frame). ---- */
+  var viewer, panes = [], syncZoom = false, syncPan = false, active = 0, lastTrigger, moved = false;
+  var pointers = {};
+  var pinch = { pane: -1, dist: 0 };
+  var LAYOUT_KEY = "ga-viewer-layout";
+  var layoutChoice = null;  /* null = auto; "side" or "stack" once the user picked one */
+  try {
+    var savedLayout = localStorage.getItem(LAYOUT_KEY);
+    if (savedLayout === "side" || savedLayout === "stack") layoutChoice = savedLayout;
+  } catch (e) { /* storage blocked: stay on auto */ }
+
+  function effectiveLayout() {
+    return layoutChoice || (window.innerWidth >= 900 && window.innerWidth > window.innerHeight ? "side" : "stack");
+  }
+
+  function applyLayout(refit) {
+    var mode = effectiveLayout();
+    viewer.querySelector(".viewer-panes").dataset.layout = mode;
+    ["side", "stack"].forEach(function (name) {
+      viewer.querySelector('[data-viewer="layout-' + name + '"]').setAttribute("aria-pressed", String(name === mode));
+    });
+    if (refit) fitAll();
+  }
+
+  function initViewer() {
+    viewer = document.getElementById("viewer");
+    panes = [0, 1].map(function (i) {
+      var el = viewer.querySelector('[data-pane="' + i + '"]');
+      return { el: el, stage: el.querySelector(".viewer-stage"), box: el.querySelector(".viewer-img"), label: el.querySelector(".pane-label"),
+               v: { s: 1, x: 0, y: 0, fit: 1, w: 1, h: 1 } };
+    });
+  }
+
+  function apply(p) { p.box.style.transform = "translate(" + p.v.x + "px," + p.v.y + "px) scale(" + p.v.s + ")"; }
+
+  function livePanes() { return panes.filter(function (p) { return !p.el.hidden; }); }
+
+  /* zoom sync: the other pane takes the same scale, zooming around the same point of its own stage;
+     each pane keeps its own position */
+  function zoomOthers(from, cx, cy) {
+    if (!syncZoom) return;
+    livePanes().forEach(function (p) {
+      if (p === from) return;
+      var k = from.v.s / p.v.s;
+      p.v.x = cx - (cx - p.v.x) * k;
+      p.v.y = cy - (cy - p.v.y) * k;
+      p.v.s = from.v.s;
+      apply(p);
+    });
+  }
+
+  /* pan sync: the other pane moves by the same screen delta; scales stay independent */
+  function panOthers(from, dx, dy) {
+    if (!syncPan) return;
+    livePanes().forEach(function (p) {
+      if (p === from) return;
+      p.v.x += dx;
+      p.v.y += dy;
+      apply(p);
+    });
+  }
+
+  function fitPane(p) {
+    var r = p.stage.getBoundingClientRect();
+    p.v.fit = Math.min(r.width / p.v.w, r.height / p.v.h) * 0.96;
+    p.v.s = p.v.fit;
+    p.v.x = (r.width - p.v.w * p.v.s) / 2;
+    p.v.y = (r.height - p.v.h * p.v.s) / 2;
+    apply(p);
+  }
+
+  function fitAll() { livePanes().forEach(fitPane); }
+
+  function zoomAt(p, factor, cx, cy) {
+    var s = Math.min(Math.max(p.v.s * factor, p.v.fit * 0.5), p.v.fit * 12);
+    var k = s / p.v.s;
+    p.v.x = cx - (cx - p.v.x) * k;
+    p.v.y = cy - (cy - p.v.y) * k;
+    p.v.s = s;
+    apply(p);
+    zoomOthers(p, cx, cy);
+  }
+
+  function zoomCenter(factor) {
+    var p = panes[active].el.hidden ? panes[0] : panes[active];
+    var r = p.stage.getBoundingClientRect();
+    zoomAt(p, factor, r.width / 2, r.height / 2);
+  }
+
+  function mount(p, svg, label) {
+    var n = panes.indexOf(p);
+    var html = svg.outerHTML
+      .replace(/ id="/g, ' id="v' + n + '-')
+      .replace(/url\(#/g, "url(#v" + n + "-")
+      .replace(/aria-labelledby="([^"]*)"/g, function (m, ids) {
+        return 'aria-labelledby="' + ids.split(" ").map(function (i) { return "v" + n + "-" + i; }).join(" ") + '"';
+      });
+    p.box.innerHTML = html;
+    var clone = p.box.firstElementChild;
+    var vb = clone.viewBox.baseVal;
+    p.v.w = vb.width || 1;
+    p.v.h = vb.height || 1;
+    clone.removeAttribute("style");
+    clone.style.cssText = "width:100%;height:100%;display:block;max-width:none";
+    p.box.style.width = p.v.w + "px";
+    p.box.style.height = p.v.h + "px";
+    p.label.textContent = label || "";
+    p.label.hidden = !label;
+  }
+
+  function titleOf(svg) {
+    var t = svg.querySelector("title");
+    return t ? t.textContent : "";
+  }
+
+  function openViewer(svgs, labels, trigger) {
+    if (!viewer) initViewer();
+    lastTrigger = trigger;
+    var compare = svgs.length > 1;
+    panes[0].el.hidden = false;
+    panes[1].el.hidden = !compare;
+    syncZoom = false;
+    syncPan = false;
+    active = 0;
+    ["sync-zoom", "sync-pan"].forEach(function (name) {
+      var toggle = viewer.querySelector('[data-viewer="' + name + '"]');
+      toggle.hidden = !compare;
+      toggle.setAttribute("aria-pressed", "false");
+    });
+    mount(panes[0], svgs[0], compare ? labels[0] : "");
+    if (compare) mount(panes[1], svgs[1], labels[1]);
+    document.getElementById("viewer-caption").textContent = compare ? labels.join(" / ") : titleOf(svgs[0]);
+    var legendSource = !compare && svgs[0].closest(".card") ? svgs[0].closest(".card").querySelector(".seq-legend") : null;
+    var viewerLegend = document.getElementById("viewer-legend");
+    viewerLegend.innerHTML = legendSource ? legendSource.innerHTML : "";
+    viewerLegend.hidden = !legendSource;
+    viewer.hidden = false;
+    doc.classList.add("viewer-open");
+    viewer.querySelector(".layout-seg").hidden = !compare;
+    applyLayout(false);
+    fitAll();
+    viewer.querySelector('[data-viewer="close"]').focus();
+  }
+
+  function closeViewer() {
+    viewer.hidden = true;
+    doc.classList.remove("viewer-open");
+    panes.forEach(function (p) { p.box.innerHTML = ""; });
+    if (lastTrigger && lastTrigger.focus) lastTrigger.focus();
+  }
+
+  function viewerOpen() { return viewer && !viewer.hidden; }
+
+  function paneOf(target) {
+    var el = target.closest && target.closest(".viewer-pane");
+    return el ? panes[+el.dataset.pane] : null;
+  }
+
+  document.addEventListener("keydown", function (e) {
+    if (!viewerOpen()) return;
+    if (e.key === "Escape") { closeViewer(); return; }
+    if (e.key === "+" || e.key === "=") zoomCenter(1.25);
+    else if (e.key === "-") zoomCenter(0.8);
+    else if (e.key === "0") fitAll();
+    else if (e.key === "Tab") {
+      var buttons = Array.prototype.filter.call(viewer.querySelectorAll("button"), function (b) { return !b.hidden; });
+      var first = buttons[0], last = buttons[buttons.length - 1];
+      if (e.shiftKey && document.activeElement === first) { last.focus(); e.preventDefault(); }
+      else if (!e.shiftKey && document.activeElement === last) { first.focus(); e.preventDefault(); }
+    }
+  });
+
+  document.addEventListener("wheel", function (e) {
+    if (!viewerOpen()) return;
+    var p = paneOf(e.target);
+    if (!p) return;
+    e.preventDefault();
+    active = panes.indexOf(p);
+    var r = p.stage.getBoundingClientRect();
+    zoomAt(p, Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top);
+  }, { passive: false });
+
+  function pinchDistance(pane) {
+    var ids = Object.keys(pointers).filter(function (id) { return pointers[id].pane === pane; });
+    if (ids.length < 2) return 0;
+    var a = pointers[ids[0]], b = pointers[ids[1]];
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+
+  document.addEventListener("pointerdown", function (e) {
+    if (!viewerOpen()) return;
+    var p = paneOf(e.target);
+    if (!p || e.target.closest(".viewer-bar")) return;
+    var n = panes.indexOf(p);
+    active = n;
+    pointers[e.pointerId] = { x: e.clientX, y: e.clientY, pane: n };
+    moved = false;
+    pinch = { pane: n, dist: pinchDistance(n) };
+    p.stage.classList.add("grabbing");
+  });
+
+  document.addEventListener("pointermove", function (e) {
+    var prev = pointers[e.pointerId];
+    if (!prev || !viewerOpen()) return;
+    var p = panes[prev.pane];
+    pointers[e.pointerId] = { x: e.clientX, y: e.clientY, pane: prev.pane };
+    var d = pinchDistance(prev.pane);
+    if (d) {
+      var r = p.stage.getBoundingClientRect();
+      if (pinch.dist) zoomAt(p, d / pinch.dist, e.clientX - r.left, e.clientY - r.top);
+      pinch.dist = d;
+    } else {
+      var dx = e.clientX - prev.x, dy = e.clientY - prev.y;
+      p.v.x += dx;
+      p.v.y += dy;
+      apply(p);
+      panOthers(p, dx, dy);
+    }
+    moved = true;
+  });
+
+  function endPointer(e) {
+    delete pointers[e.pointerId];
+    pinch.dist = 0;
+    panes.forEach(function (p) { if (p) p.stage.classList.remove("grabbing"); });
+  }
+  document.addEventListener("pointerup", endPointer);
+  document.addEventListener("pointercancel", endPointer);
+
+  function labelOf(strong) {
+    var span = strong.querySelector('[data-l="' + doc.lang + '"]');
+    return (span || strong).textContent;
+  }
+
+  function hasSelection() {
+    try { return String(window.getSelection()).length > 0; } catch (err) { return false; }
+  }
+
+  document.addEventListener("click", function (e) {
+    if (viewerOpen()) {
+      var action = e.target.closest("[data-viewer]");
+      if (action) {
+        var name = action.dataset.viewer;
+        if (name === "close") closeViewer();
+        else if (name === "in") zoomCenter(1.25);
+        else if (name === "out") zoomCenter(0.8);
+        else if (name === "layout-side" || name === "layout-stack") {
+          layoutChoice = name === "layout-side" ? "side" : "stack";
+          try { localStorage.setItem(LAYOUT_KEY, layoutChoice); } catch (err) { /* ignore */ }
+          applyLayout(true);
+        } else if (name === "sync-zoom") {
+          syncZoom = !syncZoom;
+          action.setAttribute("aria-pressed", String(syncZoom));
+          if (syncZoom) { var r = panes[active].stage.getBoundingClientRect(); zoomOthers(panes[active], r.width / 2, r.height / 2); }
+        } else if (name === "sync-pan") {
+          syncPan = !syncPan;
+          action.setAttribute("aria-pressed", String(syncPan));
+        } else fitAll();
+      } else if (e.target.classList.contains("viewer-stage") && !moved) {
+        closeViewer();
+      }
+      return;
+    }
+    var both = e.target.closest("[data-compare]");
+    if (both) {
+      var pair = both.closest(".ba-cols");
+      var figures = pair.querySelectorAll(".diagram-frame > svg");
+      var heads = pair.querySelectorAll(".pair-side > strong");
+      if (figures.length === 2) openViewer([figures[0], figures[1]], [labelOf(heads[0]), labelOf(heads[1])], both);
+      return;
+    }
+    var one = e.target.closest(".diagram .expand, .diagram-frame > svg");
+    if (one && !hasSelection()) {
+      var frame = one.closest(".diagram-frame");
+      openViewer([frame.querySelector(":scope > svg")], [], frame.querySelector(".expand") || one);
+    }
+  });
+
+  document.addEventListener("click", function (e) {
+    var langBtn = e.target.closest("[data-set-lang]");
+    if (langBtn) {
+      doc.lang = langBtn.dataset.setLang;
+      try { localStorage.setItem(KEY, doc.lang); } catch (err) { /* ignore */ }
+      return;
+    }
+    var tableView = e.target.closest("button[data-table-view]");
+    if (tableView) { setTableView(tableView.dataset.tableView, true); return; }
+    var tog = e.target.closest("[data-target]");
+    if (tog) { toggleFragments(tog); return; }
+    var lv = e.target.closest("[data-level-btn]");
+    if (lv) showLevel(lv.closest(".ba"), lv.dataset.levelBtn);
+  });
+
+  /* ---- top bar: hides while scrolling down, shows on scrolling up, near the top, with focus inside it, with the viewer open
+         or while the side index is being used. --header-h follows the visible state so sticky offsets stay right. ---- */
+  function initAutoHideHeader() {
+    var header = document.querySelector(".top");
+    if (!header) return;
+    var lastY = window.scrollY, hidden = false, ticking = false, pinUntil = 0;
+    function setHidden(next) {
+      if (next === hidden) return;
+      hidden = next;
+      header.classList.toggle("is-hidden", next);
+      doc.style.setProperty("--header-h", next ? "0px" : header.offsetHeight + "px");
+    }
+    function update() {
+      ticking = false;
+      var y = window.scrollY, delta = y - lastY;
+      if (viewerOpen() || header.contains(document.activeElement) || Date.now() < pinUntil || y <= header.offsetHeight) { setHidden(false); lastY = y; return; }
+      if (delta > 8) { setHidden(true); lastY = y; }
+      else if (delta < -8) { setHidden(false); lastY = y; }
+    }
+    window.addEventListener("scroll", function () {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(update);
+    }, { passive: true });
+    header.addEventListener("focusin", function () { setHidden(false); });
+    function pinForSideIndex(e) { if (e.target.closest && e.target.closest(".side")) pinUntil = Date.now() + 1500; }
+    document.addEventListener("click", pinForSideIndex);
+    document.addEventListener("focusin", pinForSideIndex);
+  }
+
+  /* ---- side index scrollspy (Tab 3 concepts, Tab 4 use cases) and sticky offsets ---- */
+  function initSideIndex() {
+    var header = document.querySelector(".top");
+    if (header) doc.style.setProperty("--header-h", header.offsetHeight + "px");
+    var links = Array.prototype.slice.call(document.querySelectorAll('.side a[href^="#"]'));
+    var targets = links.map(function (a) { return document.getElementById(a.getAttribute("href").slice(1)); });
+    if (!links.length || targets.indexOf(null) !== -1) return;
+    function update() {
+      var line = window.innerHeight * 0.3;
+      var current = 0;
+      targets.forEach(function (t, i) { if (t.getBoundingClientRect().top <= line) current = i; });
+      links.forEach(function (a, i) {
+        a.classList.toggle("active", i === current);
+        if (i === current) a.setAttribute("aria-current", "true"); else a.removeAttribute("aria-current");
+      });
+    }
+    var queued = false;
+    function schedule() {
+      if (queued) return;
+      queued = true;
+      setTimeout(function () { queued = false; update(); }, 30);
+    }
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", function () { if (header) doc.style.setProperty("--header-h", header.offsetHeight + "px"); schedule(); });
+    if ("IntersectionObserver" in window) {
+      try {
+        var io = new IntersectionObserver(schedule, { rootMargin: "0px 0px -60% 0px" });
+        targets.forEach(function (t) { io.observe(t); });
+      } catch (err) { /* the scroll listener above still works */ }
+    }
+    update();
+  }
+
+  window.addEventListener("resize", function () {
+    if (viewerOpen() && !layoutChoice && !panes[1].el.hidden) applyLayout(true);
+  });
+
+  /* narrow screens: flipped (default) or card view for the key tables; one global choice */
+  var TABLE_VIEW_KEY = "ga-table-view";
+
+  function setTableView(view, save) {
+    doc.dataset.tableView = view;
+    document.querySelectorAll("button[data-table-view]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.tableView === view)); });
+    if (!save) return;
+    try { localStorage.setItem(TABLE_VIEW_KEY, view); } catch (err) { /* ignore */ }
+  }
+
+  document.addEventListener("scroll", function (e) {
+    var box = e.target;
+    if (!box.classList || !box.classList.contains("flip-scroll")) return;
+    var set = box.parentElement;
+    set.classList.toggle("scrolled", box.scrollLeft > 8);
+    set.classList.toggle("at-end", box.scrollLeft + box.clientWidth >= box.scrollWidth - 4);
+  }, true);
+
+  function init() {
+    initAutoHideHeader();
+    var savedView = null;
+    try { savedView = localStorage.getItem(TABLE_VIEW_KEY); } catch (err) { /* default */ }
+    setTableView(savedView === "cards" ? "cards" : "flip", false);
+    initSideIndex();
+    if (document.body.classList.contains("print")) expandAllFragments();
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
+</script>
+</head>
+<body class="">
+<header class="top">
+  <div class="brand"><strong class="project">devbench</strong><span class="pill"><span data-l="en">Solution</span><span data-l="th">โซลูชัน</span></span></div>
+  <nav class="nav" aria-label="Artifact tabs"><div class="nav-group"><span class="tab disabled" aria-disabled="true" tabindex="0" title="Not created yet / ยังไม่ได้สร้าง"><span class="tab-num">0</span><span class="tab-label"><span data-l="en">Intent</span><span data-l="th">เจตนา</span></span><svg class="tab-lock" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><rect x="2" y="5" width="8" height="6" rx="1" fill="currentColor"/><path d="M4 5V3.5a2 2 0 0 1 4 0V5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></span></div><span class="nav-divider" aria-hidden="true"></span><div class="nav-group"><span class="nav-group-label"><span data-l="en">Solution</span><span data-l="th">โซลูชัน</span></span><span class="tab disabled" aria-disabled="true" tabindex="0" title="Not created yet / ยังไม่ได้สร้าง"><span class="tab-num">1</span><span class="tab-label"><span data-l="en">Use cases</span><span data-l="th">ยูสเคส</span></span><svg class="tab-lock" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><rect x="2" y="5" width="8" height="6" rx="1" fill="currentColor"/><path d="M4 5V3.5a2 2 0 0 1 4 0V5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></span><span class="tab disabled" aria-disabled="true" tabindex="0" title="Not created yet / ยังไม่ได้สร้าง"><span class="tab-num">2</span><span class="tab-label"><span data-l="en">Decisions</span><span data-l="th">การตัดสินใจ</span></span><svg class="tab-lock" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><rect x="2" y="5" width="8" height="6" rx="1" fill="currentColor"/><path d="M4 5V3.5a2 2 0 0 1 4 0V5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></span><span class="tab current" aria-current="page"><span class="tab-num">3</span><span class="tab-label"><span data-l="en">Concepts</span><span data-l="th">แนวคิด</span></span></span><span class="tab disabled" aria-disabled="true" tabindex="0" title="Not created yet / ยังไม่ได้สร้าง"><span class="tab-num">4</span><span class="tab-label"><span data-l="en">UC details</span><span data-l="th">รายละเอียดยูสเคส</span></span><svg class="tab-lock" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><rect x="2" y="5" width="8" height="6" rx="1" fill="currentColor"/><path d="M4 5V3.5a2 2 0 0 1 4 0V5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></span><span class="tab disabled" aria-disabled="true" tabindex="0" title="Not created yet / ยังไม่ได้สร้าง"><span class="tab-num">5</span><span class="tab-label"><span data-l="en">Components</span><span data-l="th">คอมโพเนนต์</span></span><svg class="tab-lock" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><rect x="2" y="5" width="8" height="6" rx="1" fill="currentColor"/><path d="M4 5V3.5a2 2 0 0 1 4 0V5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></span></div></nav>
+  <div class="lang" role="group" aria-label="Language"><button type="button" data-set-lang="en">EN</button><button type="button" data-set-lang="th">TH</button></div>
+</header>
+<main>
+<div class="split">
+  <aside class="side">
+    <span class="lbl"><span data-l="en">Concepts</span><span data-l="th">แนวคิด</span></span><a href="#C1"><strong>C1</strong> <span data-l="en">A Work (Central folder + 1:1 Herdr workspace)</span><span data-l="th">Work (โฟลเดอร์กลาง + Herdr workspace แบบ 1:1)</span><span class="side-sub"><span data-l="en">Every task gets its own dedicated folder holding all repo worktrees and notes, paired 1-to-1 with its own Herdr workspace and tracked centrally by the Dispatcher.</span><span data-l="th">ทุกงานมีโฟลเดอร์เฉพาะของตัวเองที่รวม repo worktree และโน้ตทั้งหมดไว้ด้วยกัน คู่กับ Herdr workspace เฉพาะงานแบบ 1 ต่อ 1 และมีบันทึกกลางให้ Dispatcher เห็นทันที</span></span></a><a href="#C2"><strong>C2</strong> <span data-l="en">4-Tier Agent Hierarchy &amp; the 3 Session IDs</span><span data-l="th">ลำดับชั้นเอเจนต์ 4 ระดับ และ Session ID 3 ชนิด</span><span class="side-sub"><span data-l="en">Work flows cleanly down Dispatcher -&gt; Owner -&gt; (domain) worker -&gt; decoupled sub-agent, and every persistent session tracks three distinct IDs so nothing gets lost.</span><span data-l="th">งานไหลลงตามลำดับ Dispatcher -&gt; Owner -&gt; (domain) worker -&gt; sub-agent แยกอิสระ โดยทุก persistent session จะบันทึก ID แยก 3 ชนิดไว้ไม่ให้หลงทาง</span></span></a><a href="#C3"><strong>C3</strong> <span data-l="en">Herdr Split: herdr-core Keeps Alive, herdr-app Shows</span><span data-l="th">การแบ่งหน้าที่ของ Herdr: herdr-core เลี้ยงโปรเซส, herdr-app แสดงผล</span><span class="side-sub"><span data-l="en">herdr-core (hc) keeps agent processes alive in the background while herdr-app only controls what you see in spaces, tabs, and panes.</span><span data-l="th">herdr-core (hc) คอยเลี้ยงโปรเซสเอเจนต์ให้ทำงานต่อเบื้องหลัง ส่วน herdr-app คุมเฉพาะสิ่งที่ผู้ใช้มองเห็นใน space, tab และ pane</span></span></a><a href="#C4"><strong>C4</strong> <span data-l="en">Three Separated Stores &amp; Live Reconciliation</span><span data-l="th">3 แหล่งเก็บข้อมูลที่แยกขาด และการ Reconcile กับความจริงสด</span><span class="side-sub"><span data-l="en">Plugin code, external user config, and central Dispatcher work state live in three separate places — and Herdr is always treated as live truth over saved state.</span><span data-l="th">โค้ดปลั๊กอิน, external user config และ central work state ของ Dispatcher ถูกแยกเก็บเป็น 3 ส่วนชัดเจน โดยยึด Herdr เป็นความจริงสดเสมอ</span></span></a>
+  </aside>
+  <div class="main-col">
+    <section>
+      <div class="lbl"><span data-l="en">Team intro: what is new in this solution</span><span data-l="th">แนะนำทีม: อะไรคือสิ่งใหม่ในโซลูชันนี้</span></div>
+      <p class="muted"><span data-l="en">Read top to bottom. One block per concept: the diagram leads, the text describes it.</span><span data-l="th">อ่านจากบนลงล่าง หนึ่งบล็อกต่อหนึ่งแนวคิด: ไดอะแกรมนำ ข้อความอธิบาย</span></p>
+    </section>
+    <article class="card blk" id="C1">
+  <header class="blk-head">
+    <div class="lbl">C1</div>
+    <h2><span data-l="en">A Work (Central folder + 1:1 Herdr workspace)</span><span data-l="th">Work (โฟลเดอร์กลาง + Herdr workspace แบบ 1:1)</span> <span class="kind"><span data-l="en">new pattern</span><span data-l="th">รูปแบบใหม่</span></span></h2>
+    <p class="oneline"><span class="lbl"><span data-l="en">In one line</span><span data-l="th">สรุปหนึ่งบรรทัด</span></span><span data-l="en">Every task gets its own dedicated folder holding all repo worktrees and notes, paired 1-to-1 with its own Herdr workspace and tracked centrally by the Dispatcher.</span><span data-l="th">ทุกงานมีโฟลเดอร์เฉพาะของตัวเองที่รวม repo worktree และโน้ตทั้งหมดไว้ด้วยกัน คู่กับ Herdr workspace เฉพาะงานแบบ 1 ต่อ 1 และมีบันทึกกลางให้ Dispatcher เห็นทันที</span></p>
+    <dl class="plain-card"><div><dt><span data-l="en">Before</span><span data-l="th">ก่อน</span></dt><dd><span data-l="en">Branches, terminals, and notes for one task were scattered across separate repo folders and shared Herdr tabs.</span><span data-l="th">branch, เทอร์มินัล และโน้ตของงานเดียวกระจัดกระจายอยู่ตามโฟลเดอร์ repo ต่างๆ และปนกันใน Herdr tab เดียว</span></dd></div><div><dt><span data-l="en">Now</span><span data-l="th">ตอนนี้</span></dt><dd><span data-l="en">One slug maps to one work folder (&lt;work-root&gt;/&lt;slug&gt;/), one branch set across target repos, one dedicated Herdr workspace, and one central record in ~/.devbench/state/works/&lt;slug&gt;.json.</span><span data-l="th">1 slug แทน 1 โฟลเดอร์งาน (&lt;work-root&gt;/&lt;slug&gt;/), 1 ชุด branch ข้าม repo เป้าหมาย, 1 Herdr workspace เฉพาะ และ 1 บันทึกกลางใน ~/.devbench/state/works/&lt;slug&gt;.json</span></dd></div><div><dt><span data-l="en">Why it matters</span><span data-l="th">ทำไมจึงสำคัญ</span></dt><dd><span data-l="en">You can inspect, pause, resume, or archive an entire multi-repo effort as a single unit without risking collateral damage to other active tasks.</span><span data-l="th">สามารถตรวจสอบ พักงาน resume หรือ archive งานหลาย repo ทั้งก้อนได้ในคราวเดียวโดยไม่เสี่ยงกระทบงานอื่นที่กำลังรันอยู่</span></dd></div></dl>
+    <p class="analogy"><strong><span data-l="en">Think of it like</span><span data-l="th">ลองนึกถึง</span></strong> <span data-l="en">A dedicated project desk: every blueprint for that job sits on one table, logged on one central whiteboard, and when it finishes you box the whole desk at once.</span><span data-l="th">โต๊ะทำงานเฉพาะโปรเจกต์: แบบแปลนทุกแผ่นของงานนี้อยู่บนโต๊ะเดียว จดคุมไว้บนกระดานกลางใบเดียว และเมื่อจบงานก็เก็บลงกล่องทั้งโต๊ะในครั้งเดียว</span></p>
+  </header>
+  <div class="dg"><figure class="diagram"><span class="diagram-frame" style="max-width:1080px"><svg xmlns="http://www.w3.org/2000/svg" id="concept-c1" viewBox="0 0 1080 340" role="img" aria-labelledby="concept-c1-title concept-c1-desc" style="max-width:1080px">
+<title id="concept-c1-title">C1 A Work: Central folder and 1:1 Herdr workspace</title>
+<desc id="concept-c1-desc">One work slug maps 1-to-1 to a central work folder containing repo worktrees and state, plus one dedicated Herdr workspace; archiving closes the workspace first, detaches clean worktrees, and moves the folder to archive.</desc>
+<defs>
+  <marker id="concept-c1-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5E5D59" /></marker>
+  <marker id="concept-c1-arrow-new" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#1F6FA8" /></marker>
+  <marker id="concept-c1-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#D97757" /></marker>
+</defs>
+<rect width="100%" height="100%" fill="#FAF9F5" />
+<text x="24" y="28" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.1em">C1 · A WORK (CENTRAL FOLDER + 1:1 HERDR WORKSPACE)</text>
+
+
+<path d="M216 144 H292 a8 8 0 0 0 8 -8 V100 a8 8 0 0 1 8 -8 H384" fill="none" stroke="#1F6FA8" stroke-width="2" marker-end="url(#concept-c1-arrow-new)" />
+<path d="M216 176 H292 a8 8 0 0 1 8 8 V212 a8 8 0 0 0 8 8 H384" fill="none" stroke="#1F6FA8" stroke-width="2" marker-end="url(#concept-c1-arrow-new)" />
+<path d="M648 92 H732 a8 8 0 0 1 8 8 V136 a8 8 0 0 0 8 8 H824" fill="none" stroke="#D97757" stroke-width="1.8" marker-end="url(#concept-c1-arrow-accent)" />
+<path d="M648 220 H732 a8 8 0 0 0 8 -8 V184 a8 8 0 0 1 8 -8 H824" fill="none" stroke="#D97757" stroke-width="1.8" marker-end="url(#concept-c1-arrow-accent)" />
+
+
+<rect x="248" y="68" width="124" height="16" rx="2" fill="#FAF9F5" />
+<text x="310" y="80" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">1:1 WORK FOLDER</text>
+
+<rect x="248" y="228" width="124" height="16" rx="2" fill="#FAF9F5" />
+<text x="310" y="240" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">1:1 HERDR SPACE</text>
+
+<rect x="664" y="68" width="116" height="16" rx="2" fill="#FAF9F5" />
+<text x="722" y="80" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">2 DETACH + MOVE</text>
+
+<rect x="664" y="228" width="116" height="16" rx="2" fill="#FAF9F5" />
+<text x="722" y="240" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">1 CLOSE FIRST</text>
+
+
+<rect x="40" y="128" width="176" height="64" rx="6" fill="#FAF9F5" />
+<rect x="40" y="128" width="176" height="64" rx="6" fill="#141413" stroke="#141413" stroke-width="1" />
+<text x="128" y="156" fill="#FAF9F5" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Work &lt;slug&gt;</text>
+<text x="128" y="175" fill="#FAF9F5" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">one task unit</text>
+
+<rect x="384" y="56" width="264" height="72" rx="6" fill="#FAF9F5" />
+<rect x="384" y="56" width="264" height="72" rx="6" fill="#CFE4F5" stroke="#1F6FA8" stroke-width="1.2" />
+<text x="516" y="84" fill="#0B3D63" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">&lt;work-root&gt;/&lt;slug&gt;/</text>
+<text x="516" y="106" fill="#0B3D63" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">repo-a/ · repo-b/ · notes/</text>
+
+<rect x="384" y="184" width="264" height="72" rx="6" fill="#FAF9F5" />
+<rect x="384" y="184" width="264" height="72" rx="6" fill="#EFEDE6" stroke="#B0AEA5" stroke-width="1" />
+<text x="516" y="212" fill="#3D3D3A" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">herdr-app workspace</text>
+<text x="516" y="234" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">Owner pane + domain-worker tabs</text>
+
+<rect x="824" y="124" width="216" height="72" rx="6" fill="#FAF9F5" />
+<rect x="824" y="124" width="216" height="72" rx="6" fill="#CFE4F5" stroke="#1F6FA8" stroke-width="1.2" />
+<text x="932" y="152" fill="#0B3D63" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">&lt;archive-root&gt;/&lt;slug&gt;/</text>
+<text x="932" y="174" fill="#0B3D63" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">state + notes + branch SHAs</text>
+
+
+<line x1="24" y1="288" x2="1056" y2="288" stroke="rgba(20,20,19,0.10)" stroke-width="1" />
+<text x="24" y="311" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.12em">LEGEND</text>
+<rect x="112" y="300" width="20" height="14" rx="2" fill="#CFE4F5" stroke="#1F6FA8" />
+<text x="140" y="311" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">devbench-managed</text>
+<rect x="276" y="300" width="20" height="14" rx="2" fill="#EFEDE6" stroke="#B0AEA5" />
+<text x="304" y="311" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">existing Herdr</text>
+<line x1="428" y1="307" x2="456" y2="307" stroke="#D97757" stroke-width="1.8" />
+<text x="464" y="311" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">ordered archive sequence</text>
+</svg><button type="button" class="expand" aria-label="Expand diagram / ขยายไดอะแกรม"><svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M1 4V1h3M8 1h3v3M11 8v3H8M4 11H1V8" fill="none" stroke="currentColor" stroke-width="1.4"/></svg></button></span></figure></div>
+  <div class="tx">
+    <div data-l="en"><p>A Work is the top-level lifecycle unit (creating -&gt; active -&gt; archiving -&gt; archived). Inside &lt;work-root&gt;/&lt;slug&gt;/ live optional notes and one git worktree per involved repository, while its live state lives centrally at ~/.devbench/state/works/&lt;slug&gt;.json so the Dispatcher sees every work instantly. Archiving closes the 1:1 Herdr workspace first to release file locks, detaches clean worktrees while keeping git branches in their source repos, copies a frozen state snapshot into the folder, and moves it to the archive root.</p></div><div data-l="th"><p>Work คือหน่วยวงจรชีวิตระดับบนสุด (creating -&gt; active -&gt; archiving -&gt; archived) ภายใน &lt;work-root&gt;/&lt;slug&gt;/ ประกอบด้วยโน้ตและ git worktree ของแต่ละ repo ขณะที่ live state เก็บไว้ที่ส่วนกลาง ~/.devbench/state/works/&lt;slug&gt;.json เพื่อให้ Dispatcher เห็นทุกงานทันที ตอน archive จะปิด Herdr workspace แบบ 1:1 ก่อนเพื่อปล่อยไฟล์ล็อก ถอด worktree ที่สะอาดโดยคง git branch ไว้ใน repo ต้นทาง คัดลอก frozen state snapshot ลงในโฟลเดอร์ แล้วจึงย้ายไปที่ archive root</p></div>
+    <p class="muted"><span data-l="en">New terms</span><span data-l="th">คำศัพท์ใหม่</span>: <span data-l="en">work slug, central work folder, 1:1 Herdr workspace, work lifecycle</span><span data-l="th">work slug, central work folder, 1:1 Herdr workspace, work lifecycle</span></p>
+    <span class="muted"><span data-l="en">Related:</span><span data-l="th">ที่เกี่ยวข้อง:</span> <span class="ref">D1</span>, <span class="ref">D2</span>, <span class="ref">D6</span>, <span class="ref">UC-02</span>, <span class="ref">UC-05</span>, <span class="ref">UC-06</span>, <span class="ref">CMP-WORKTREE</span>, <span class="ref">CMP-STATE</span>, <span class="ref">CMP-HERDR-APP</span></span>
+  </div>
+</article><article class="card blk" id="C2">
+  <header class="blk-head">
+    <div class="lbl">C2</div>
+    <h2><span data-l="en">4-Tier Agent Hierarchy &amp; the 3 Session IDs</span><span data-l="th">ลำดับชั้นเอเจนต์ 4 ระดับ และ Session ID 3 ชนิด</span> <span class="kind"><span data-l="en">new pattern</span><span data-l="th">รูปแบบใหม่</span></span></h2>
+    <p class="oneline"><span class="lbl"><span data-l="en">In one line</span><span data-l="th">สรุปหนึ่งบรรทัด</span></span><span data-l="en">Work flows cleanly down Dispatcher -&gt; Owner -&gt; (domain) worker -&gt; decoupled sub-agent, and every persistent session tracks three distinct IDs so nothing gets lost.</span><span data-l="th">งานไหลลงตามลำดับ Dispatcher -&gt; Owner -&gt; (domain) worker -&gt; sub-agent แยกอิสระ โดยทุก persistent session จะบันทึก ID แยก 3 ชนิดไว้ไม่ให้หลงทาง</span></p>
+    <dl class="plain-card"><div><dt><span data-l="en">Before</span><span data-l="th">ก่อน</span></dt><dd><span data-l="en">Every terminal looked identical; users had to remember which pane ran which role and lost native AI session IDs whenever a terminal closed.</span><span data-l="th">ทุกเทอร์มินัลหน้าตาเหมือนกันหมด ผู้ใช้ต้องจำเองว่า pane ไหนทำบทบาทอะไร และทำ native AI session ID หายทุกครั้งที่ปิดเทอร์มินัล</span></dd></div><div><dt><span data-l="en">Now</span><span data-l="th">ตอนนี้</span></dt><dd><span data-l="en">devbench manages persistent Owner and domain-worker sessions (leaving ephemeral sub-agents to the separate delegation layer) and saves each session&#x27;s hc terminal ID, Herdr pane ID, and native AI session ID plus its cwd.</span><span data-l="th">devbench ดูแล Owner และ domain-worker session แบบคงอยู่ (แยก sub-agent ชั่วคราวไว้ใน delegation layer) และบันทึก hc terminal ID, Herdr pane ID และ native AI session ID พร้อม cwd ของแต่ละ session</span></dd></div><div><dt><span data-l="en">Why it matters</span><span data-l="th">ทำไมจึงสำคัญ</span></dt><dd><span data-l="en">Each ID has a different lifetime: when a Herdr pane or hc terminal disappears after a reboot, the saved native AI session ID and cwd let devbench resume the exact conversation.</span><span data-l="th">ID แต่ละชนิดมีอายุต่างกัน เมื่อ Herdr pane หรือ hc terminal หายหลังรีบูต ตัว native AI session ID และ cwd ที่บันทึกไว้จะช่วยให้ devbench resume บทสนทนาเดิมได้ตรงจุด</span></dd></div></dl>
+    <p class="analogy"><strong><span data-l="en">Think of it like</span><span data-l="th">ลองนึกถึง</span></strong> <span data-l="en">A hotel reservation: the room number (Herdr pane), keycard (hc terminal), and guest record (native AI session ID) are tracked separately so losing a keycard never erases the guest.</span><span data-l="th">การจองโรงแรม: เลขห้อง (Herdr pane), คีย์การ์ด (hc terminal) และประวัติแขก (native AI session ID) แยกเก็บกัน ทำให้ทำคีย์การ์ดหายก็ไม่เสียข้อมูลแขก</span></p>
+  </header>
+  <div class="dg"><figure class="diagram"><span class="diagram-frame" style="max-width:1120px"><svg xmlns="http://www.w3.org/2000/svg" id="concept-c2" viewBox="0 0 1120 364" role="img" aria-labelledby="concept-c2-title concept-c2-desc" style="max-width:1120px">
+<title id="concept-c2-title">C2 4-Tier Agent Hierarchy and 3 Session IDs</title>
+<desc id="concept-c2-desc">Four-tier hierarchy from Dispatcher to Owner to domain worker to decoupled sub-agent, showing the three separate IDs persisted in Work state for every persistent session: hc terminal ID, Herdr pane ID, and native AI session ID plus cwd.</desc>
+<defs>
+  <marker id="concept-c2-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5E5D59" /></marker>
+  <marker id="concept-c2-arrow-new" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#1F6FA8" /></marker>
+</defs>
+<rect width="100%" height="100%" fill="#FAF9F5" />
+<text x="24" y="28" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.1em">C2 · 4-TIER HIERARCHY &amp; THE 3 SESSION IDS</text>
+
+
+<path d="M224 96 H312" fill="none" stroke="#1F6FA8" stroke-width="2" marker-end="url(#concept-c2-arrow-new)" />
+<path d="M496 96 H584" fill="none" stroke="#1F6FA8" stroke-width="2" marker-end="url(#concept-c2-arrow-new)" />
+<path d="M776 96 H864" fill="none" stroke="#5E5D59" stroke-width="1.4" stroke-dasharray="5,4" marker-end="url(#concept-c2-arrow)" />
+
+
+<path d="M404 128 V168 a8 8 0 0 0 8 8 H540" fill="none" stroke="#1F6FA8" stroke-width="1.6" />
+<path d="M680 128 V168 a8 8 0 0 1 -8 8 H540" fill="none" stroke="#1F6FA8" stroke-width="1.6" />
+<path d="M540 176 V208" fill="none" stroke="#1F6FA8" stroke-width="1.6" marker-end="url(#concept-c2-arrow-new)" />
+<path d="M540 176 H224 a8 8 0 0 0 -8 8 V208" fill="none" stroke="#1F6FA8" stroke-width="1.6" marker-end="url(#concept-c2-arrow-new)" />
+<path d="M540 176 H856 a8 8 0 0 1 8 8 V208" fill="none" stroke="#1F6FA8" stroke-width="1.6" marker-end="url(#concept-c2-arrow-new)" />
+
+
+<rect x="234" y="72" width="68" height="16" rx="2" fill="#FAF9F5" />
+<text x="268" y="84" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">CREATES</text>
+
+<rect x="506" y="72" width="68" height="16" rx="2" fill="#FAF9F5" />
+<text x="540" y="84" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">SPAWNS</text>
+
+<rect x="780" y="72" width="80" height="16" rx="2" fill="#FAF9F5" />
+<text x="820" y="84" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">DELEGATES</text>
+
+
+<rect x="40" y="64" width="184" height="64" rx="6" fill="#FAF9F5" />
+<rect x="40" y="64" width="184" height="64" rx="6" fill="#141413" stroke="#141413" stroke-width="1" />
+<text x="132" y="92" fill="#FAF9F5" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">1 · Dispatcher</text>
+<text x="132" y="111" fill="#FAF9F5" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">talks to user</text>
+
+<rect x="312" y="64" width="184" height="64" rx="6" fill="#FAF9F5" />
+<rect x="312" y="64" width="184" height="64" rx="6" fill="#CFE4F5" stroke="#1F6FA8" stroke-width="1.2" />
+<text x="404" y="92" fill="#0B3D63" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">2 · Owner</text>
+<text x="404" y="111" fill="#0B3D63" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">1 per work · main pane</text>
+
+<rect x="584" y="64" width="192" height="64" rx="6" fill="#FAF9F5" />
+<rect x="584" y="64" width="192" height="64" rx="6" fill="#CFE4F5" stroke="#1F6FA8" stroke-width="1.2" />
+<text x="680" y="92" fill="#0B3D63" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">3 · Domain worker</text>
+<text x="680" y="111" fill="#0B3D63" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">0..N · tabs/splits</text>
+
+<rect x="864" y="64" width="216" height="64" rx="6" fill="#FAF9F5" />
+<rect x="864" y="64" width="216" height="64" rx="6" fill="#EFEDE6" stroke="#B0AEA5" stroke-width="1" stroke-dasharray="4,3" />
+<text x="972" y="92" fill="#3D3D3A" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">4 · Sub-agent</text>
+<text x="972" y="111" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">ephemeral · outside devbench</text>
+
+
+<rect x="88" y="208" width="256" height="68" rx="6" fill="#FAF9F5" />
+<rect x="88" y="208" width="256" height="68" rx="6" fill="#FFFFFF" stroke="#8A8880" stroke-width="1" />
+<text x="216" y="236" fill="#141413" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">hc terminal ID + name</text>
+<text x="216" y="256" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">owned by herdr-core (t7 / db-slug-role)</text>
+
+<rect x="412" y="208" width="256" height="68" rx="6" fill="#FAF9F5" />
+<rect x="412" y="208" width="256" height="68" rx="6" fill="#FFFFFF" stroke="#8A8880" stroke-width="1" />
+<text x="540" y="236" fill="#141413" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Herdr space / tab / pane ID</text>
+<text x="540" y="256" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">owned by herdr-app (visible layout)</text>
+
+<rect x="736" y="208" width="256" height="68" rx="6" fill="#FAF9F5" />
+<rect x="736" y="208" width="256" height="68" rx="6" fill="#FFFFFF" stroke="#D97757" stroke-width="1.4" />
+<text x="864" y="236" fill="#141413" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Native AI session ID + cwd</text>
+<text x="864" y="256" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">owned by CLI (survives reboot)</text>
+
+
+<line x1="24" y1="308" x2="1096" y2="308" stroke="rgba(20,20,19,0.10)" stroke-width="1" />
+<text x="24" y="331" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.12em">LEGEND</text>
+<rect x="112" y="320" width="20" height="14" rx="2" fill="#CFE4F5" stroke="#1F6FA8" />
+<text x="140" y="331" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">tracked in state.json</text>
+<rect x="308" y="320" width="20" height="14" rx="2" fill="#EFEDE6" stroke="#B0AEA5" stroke-dasharray="3,2" />
+<text x="336" y="331" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">decoupled delegation layer</text>
+</svg><button type="button" class="expand" aria-label="Expand diagram / ขยายไดอะแกรม"><svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M1 4V1h3M8 1h3v3M11 8v3H8M4 11H1V8" fill="none" stroke="currentColor" stroke-width="1.4"/></svg></button></span></figure></div>
+  <div class="tx">
+    <div data-l="en"><p>The Dispatcher creates the work and launches the Owner in the primary pane; the Owner coordinates optional domain workers (e.g. backend, frontend, docs) in tabs or splits inside the same 1:1 Herdr workspace. Ephemeral sub-agents stay outside devbench. Because Claude and Codex resume commands are cwd-scoped, state.json persists each session&#x27;s exact cwd alongside capture status (auto, manual, pending, unavailable).</p></div><div data-l="th"><p>Dispatcher เป็นคนสร้างงานและเปิด Owner ใน pane หลัก ส่วน Owner ประสานงานกับ domain worker (เช่น backend, frontend, docs) ใน tab หรือ split ภายใน Herdr workspace 1:1 เดียวกัน ขณะที่ ephemeral sub-agent อยู่นอก devbench เนื่องจากคำสั่ง resume ของ Claude และ Codex ผูกกับ cwd ไฟล์ state.json จึงเก็บ cwd ของแต่ละ session คู่กับสถานะการเก็บ ID (auto, manual, pending, unavailable)</p></div>
+    <p class="muted"><span data-l="en">New terms</span><span data-l="th">คำศัพท์ใหม่</span>: <span data-l="en">Dispatcher, Owner, domain worker, sub-agent, hc terminal ID, Herdr pane ID, native AI session ID</span><span data-l="th">Dispatcher, Owner, domain worker, sub-agent, hc terminal ID, Herdr pane ID, native AI session ID</span></p>
+    <span class="muted"><span data-l="en">Related:</span><span data-l="th">ที่เกี่ยวข้อง:</span> <span class="ref">D2</span>, <span class="ref">D5</span>, <span class="ref">UC-03</span>, <span class="ref">UC-04</span>, <span class="ref">CMP-PLUGIN</span>, <span class="ref">CMP-STATE</span>, <span class="ref">CMP-HERDR-CORE</span></span>
+  </div>
+</article><article class="card blk" id="C3">
+  <header class="blk-head">
+    <div class="lbl">C3</div>
+    <h2><span data-l="en">Herdr Split: herdr-core Keeps Alive, herdr-app Shows</span><span data-l="th">การแบ่งหน้าที่ของ Herdr: herdr-core เลี้ยงโปรเซส, herdr-app แสดงผล</span> <span class="kind"><span data-l="en">existing boundary</span><span data-l="th">ขอบเขตเดิม</span></span></h2>
+    <p class="oneline"><span class="lbl"><span data-l="en">In one line</span><span data-l="th">สรุปหนึ่งบรรทัด</span></span><span data-l="en">herdr-core (hc) keeps agent processes alive in the background while herdr-app only controls what you see in spaces, tabs, and panes.</span><span data-l="th">herdr-core (hc) คอยเลี้ยงโปรเซสเอเจนต์ให้ทำงานต่อเบื้องหลัง ส่วน herdr-app คุมเฉพาะสิ่งที่ผู้ใช้มองเห็นใน space, tab และ pane</span></p>
+    <dl class="plain-card"><div><dt><span data-l="en">Before</span><span data-l="th">ก่อน</span></dt><dd><span data-l="en">By default, hc kills every child terminal the moment its parent (the Dispatcher tab) closes or restarts, wiping out active Owners; meanwhile unlabeled hc terminals stay invisible in the Herdr window.</span><span data-l="th">โดยค่าเริ่มต้น hc จะฆ่า child terminal ทุกตัวทันทีที่ parent (แท็บ Dispatcher) ปิดหรือรีสตาร์ต ทำให้ Owner ที่กำลังทำงานอยู่ดับไปด้วย ส่วน hc terminal ที่ไม่มี label จะซ่อนอยู่ไม่โผล่ในหน้าต่าง Herdr</span></dd></div><div><dt><span data-l="en">Now</span><span data-l="th">ตอนนี้</span></dt><dd><span data-l="en">devbench creates the visible workspace via herdr-app space.new, then launches the agent via hc run --bg --outlive-parent with herdr.space=&lt;id&gt; — meaning it survives Dispatcher exit (NOT a zombie process: closing the pane/space or archiving still kills it cleanly) — and checks first_message.sent before reporting ready.</span><span data-l="th">devbench สร้าง workspace ที่มองเห็นด้วย herdr-app space.new แล้วเปิดเอเจนต์ด้วย hc run --bg --outlive-parent ติด label herdr.space=&lt;id&gt; ซึ่งแปลว่าอยู่รอดเมื่อ Dispatcher ปิด (ไม่ใช่ zombie process: การปิด pane/space หรือ archive ยังคงฆ่าโปรเซสและคืน RAM ตามปกติ) พร้อมเช็ก first_message.sent ก่อนรายงานว่าพร้อม</span></dd></div><div><dt><span data-l="en">Why it matters</span><span data-l="th">ทำไมจึงสำคัญ</span></dt><dd><span data-l="en">Separating an Owner&#x27;s lifetime from the Dispatcher tab prevents accidental kills when you restart or close the Dispatcher, while pane close and archive still free memory cleanly — and checking first_message.sent prevents blind resends on trust prompts.</span><span data-l="th">การแยกอายุของ Owner ออกจากแท็บ Dispatcher ป้องกันไม่ให้งานที่ทำอยู่ดับตอนรีสตาร์ตหรือปิด Dispatcher ขณะที่การปิด pane และ archive ยังคงคืนหน่วยความจำอย่างสะอาด และเช็ก first_message.sent เพื่อไม่ให้ส่งข้อความซ้ำมั่วเมื่อติดหน้าต่างยืนยันสิทธิ์</span></dd></div></dl>
+    <p class="analogy"><strong><span data-l="en">Think of it like</span><span data-l="th">ลองนึกถึง</span></strong> <span data-l="en">A theater stage (herdr-app) vs backstage machinery (herdr-core): closing the curtain doesn&#x27;t stop the engine running backstage, and switching off a room&#x27;s pane or archiving shuts its engine down cleanly.</span><span data-l="th">เวทีโรงละคร (herdr-app) กับเครื่องจักรหลังเวที (herdr-core): การปิดม่านไม่ได้ดับเครื่องยนต์ที่ทำงานอยู่หลังเวที แต่การปิด pane ของห้องนั้นหรือ archive จะดับเครื่องยนต์ให้เรียบร้อย</span></p>
+  </header>
+  <div class="dg"><figure class="diagram"><span class="diagram-frame" style="max-width:1080px"><svg xmlns="http://www.w3.org/2000/svg" id="concept-c3" viewBox="0 0 1080 344" role="img" aria-labelledby="concept-c3-title concept-c3-desc" style="max-width:1080px">
+<title id="concept-c3-title">C3 Herdr Split: herdr-core Keeps Alive, herdr-app Shows</title>
+<desc id="concept-c3-desc">devbench creates the visible workspace via herdr-app space.new, then launches persistent agents via herdr-core hc run --bg --outlive-parent with the herdr.space label so processes survive Dispatcher exit without becoming zombies (closing the pane or archiving kills them cleanly).</desc>
+<defs>
+  <marker id="concept-c3-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5E5D59" /></marker>
+  <marker id="concept-c3-arrow-new" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#1F6FA8" /></marker>
+  <marker id="concept-c3-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#D97757" /></marker>
+</defs>
+<rect width="100%" height="100%" fill="#FAF9F5" />
+<text x="24" y="28" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.1em">C3 · HERDR-CORE KEEPS ALIVE · HERDR-APP SHOWS</text>
+
+
+<path d="M236 144 H324 a8 8 0 0 0 8 -8 V100 a8 8 0 0 1 8 -8 H420" fill="none" stroke="#1F6FA8" stroke-width="2" marker-end="url(#concept-c3-arrow-new)" />
+<path d="M236 176 H324 a8 8 0 0 1 8 8 V212 a8 8 0 0 0 8 8 H420" fill="none" stroke="#1F6FA8" stroke-width="2" marker-end="url(#concept-c3-arrow-new)" />
+<path d="M560 184 V128" fill="none" stroke="#D97757" stroke-width="1.8" stroke-dasharray="5,4" marker-end="url(#concept-c3-arrow-accent)" />
+<path d="M700 220 H832" fill="none" stroke="#5E5D59" stroke-width="1.6" marker-end="url(#concept-c3-arrow)" />
+
+
+<rect x="272" y="68" width="136" height="16" rx="2" fill="#FAF9F5" />
+<text x="340" y="80" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">1 SPACE.NEW</text>
+
+<rect x="248" y="228" width="166" height="16" rx="2" fill="#FAF9F5" />
+<text x="331" y="240" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.04em">2 SURVIVES DISPATCHER</text>
+
+<rect x="568" y="148" width="132" height="16" rx="2" fill="#FAF9F5" />
+<text x="572" y="160" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.06em">HERDR.SPACE=&lt;ID&gt;</text>
+
+<rect x="714" y="196" width="106" height="16" rx="2" fill="#FAF9F5" />
+<text x="767" y="208" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">CHECK READY</text>
+
+
+<rect x="40" y="128" width="196" height="64" rx="6" fill="#FAF9F5" />
+<rect x="40" y="128" width="196" height="64" rx="6" fill="#CFE4F5" stroke="#1F6FA8" stroke-width="1.2" />
+<text x="138" y="156" fill="#0B3D63" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">devbench plugin</text>
+<text x="138" y="175" fill="#0B3D63" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">short-lived caller</text>
+
+<rect x="420" y="56" width="280" height="72" rx="6" fill="#FAF9F5" />
+<rect x="420" y="56" width="280" height="72" rx="6" fill="#EFEDE6" stroke="#B0AEA5" stroke-width="1" />
+<text x="560" y="84" fill="#3D3D3A" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">herdr-app (Window UI)</text>
+<text x="560" y="106" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">shows space · pane close / archive kills</text>
+
+<rect x="420" y="184" width="280" height="72" rx="6" fill="#FAF9F5" />
+<rect x="420" y="184" width="280" height="72" rx="6" fill="#EFEDE6" stroke="#B0AEA5" stroke-width="1" />
+<text x="560" y="212" fill="#3D3D3A" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">herdr-core (hc daemon)</text>
+<text x="560" y="234" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">keeps alive · first_message.sent</text>
+
+<rect x="832" y="184" width="208" height="72" rx="6" fill="#FAF9F5" />
+<rect x="832" y="184" width="208" height="72" rx="6" fill="#FFFFFF" stroke="#8A8880" stroke-width="1" />
+<text x="936" y="212" fill="#141413" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Agent CLIs</text>
+<text x="936" y="234" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">claude · codex --no-daemon · agy</text>
+
+
+<line x1="24" y1="292" x2="1056" y2="292" stroke="rgba(20,20,19,0.10)" stroke-width="1" />
+<text x="24" y="315" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.12em">LEGEND</text>
+<rect x="112" y="304" width="20" height="14" rx="2" fill="#CFE4F5" stroke="#1F6FA8" />
+<text x="140" y="315" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">new</text>
+<rect x="192" y="304" width="20" height="14" rx="2" fill="#EFEDE6" stroke="#B0AEA5" />
+<text x="220" y="315" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">existing Herdr</text>
+<line x1="348" y1="311" x2="376" y2="311" stroke="#D97757" stroke-width="1.8" stroke-dasharray="4,3" />
+<text x="384" y="315" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">visibility binding label</text>
+</svg><button type="button" class="expand" aria-label="Expand diagram / ขยายไดอะแกรม"><svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M1 4V1h3M8 1h3v3M11 8v3H8M4 11H1V8" fill="none" stroke="currentColor" stroke-width="1.4"/></svg></button></span></figure></div>
+  <div class="tx">
+    <div data-l="en"><p>In herdr-core, &#x27;parent&#x27; refers to the Dispatcher terminal that spawned the session. Passing --outlive-parent only prevents active Owner/worker sessions from being killed when you close or restart the Dispatcher — it does not create zombie processes, because closing a pane/space in Herdr or running devbench archive explicitly kills and removes those terminals to free RAM and Windows file locks. Attaching herdr.space=&lt;id&gt; keeps them visible in the 1:1 workspace, and --no-daemon keeps Codex commands inside hc.</p></div><div data-l="th"><p>ใน herdr-core คำว่า &#x27;parent&#x27; หมายถึงเทอร์มินัล Dispatcher ที่เป็นคนเปิด session การส่ง --outlive-parent มีไว้เพียงป้องกันไม่ให้ Owner/worker ที่กำลังทำงานอยู่ถูกฆ่าเมื่อคุณปิดหรือรีสตาร์ต Dispatcher เท่านั้น ไม่ได้ทำให้เกิด zombie process เพราะการปิด pane/space ใน Herdr หรือการรัน devbench archive จะ kill และลบ terminal เหล่านั้นออกเพื่อคืน RAM และปล่อยล็อกไฟล์บน Windows อย่างชัดเจน การติด label herdr.space=&lt;id&gt; ทำให้แสดงผลใน 1:1 workspace และ --no-daemon ทำให้คำสั่งของ Codex ทำงานอยู่ภายใน hc</p></div>
+    <p class="muted"><span data-l="en">New terms</span><span data-l="th">คำศัพท์ใหม่</span>: <span data-l="en">herdr-core (hc), herdr-app, --outlive-parent, herdr.space label, first_message.sent</span><span data-l="th">herdr-core (hc), herdr-app, --outlive-parent, herdr.space label, first_message.sent</span></p>
+    <span class="muted"><span data-l="en">Related:</span><span data-l="th">ที่เกี่ยวข้อง:</span> <span class="ref">D2</span>, <span class="ref">D8</span>, <span class="ref">UC-03</span>, <span class="ref">UC-04</span>, <span class="ref">UC-05</span>, <span class="ref">CMP-PLUGIN</span>, <span class="ref">CMP-HERDR-APP</span>, <span class="ref">CMP-HERDR-CORE</span></span>
+  </div>
+</article><article class="card blk" id="C4">
+  <header class="blk-head">
+    <div class="lbl">C4</div>
+    <h2><span data-l="en">Three Separated Stores &amp; Live Reconciliation</span><span data-l="th">3 แหล่งเก็บข้อมูลที่แยกขาด และการ Reconcile กับความจริงสด</span> <span class="kind"><span data-l="en">new architecture</span><span data-l="th">สถาปัตยกรรมใหม่</span></span></h2>
+    <p class="oneline"><span class="lbl"><span data-l="en">In one line</span><span data-l="th">สรุปหนึ่งบรรทัด</span></span><span data-l="en">Plugin code, external user config, and central Dispatcher work state live in three separate places — and Herdr is always treated as live truth over saved state.</span><span data-l="th">โค้ดปลั๊กอิน, external user config และ central work state ของ Dispatcher ถูกแยกเก็บเป็น 3 ส่วนชัดเจน โดยยึด Herdr เป็นความจริงสดเสมอ</span></p>
+    <dl class="plain-card"><div><dt><span data-l="en">Before</span><span data-l="th">ก่อน</span></dt><dd><span data-l="en">Personal paths, orchestration scripts, and ad-hoc notes lived together, so plugin updates risked wiping settings and stale files misled status checks.</span><span data-l="th">พาธส่วนตัว สคริปต์ประสานงาน และโน้ตต่างๆ ปนกัน ทำให้การอัปเดตปลั๊กอินเสี่ยงทับค่าตั้งค่า และไฟล์ state เก่าทำให้ดูสถานะผิดพลาด</span></dd></div><div><dt><span data-l="en">Now</span><span data-l="th">ตอนนี้</span></dt><dd><span data-l="en">Generic plugin code + config.example.json stay in the marketplace repo; personal config lives externally at ~/.devbench/config.json; work state lives centrally at ~/.devbench/state/works/&lt;slug&gt;.json so the Dispatcher reads all works instantly and reconciles against live hc/herdr-app.</span><span data-l="th">โค้ดปลั๊กอินที่เป็นกลาง + config.example.json อยู่ใน marketplace repo; user config อยู่ที่ ~/.devbench/config.json; work state อยู่ที่ส่วนกลาง ~/.devbench/state/works/&lt;slug&gt;.json เพื่อให้ Dispatcher อ่านทุกงานได้ทันทีและ reconcile กับ hc/herdr-app สด</span></dd></div><div><dt><span data-l="en">Why it matters</span><span data-l="th">ทำไมจึงสำคัญ</span></dt><dd><span data-l="en">Updating the plugin never clobbers personal paths or aliases, pushing code never leaks private paths, the Dispatcher sees every work in one place without scanning folders, and crashed operations recover cleanly from atomic phase checkpoints.</span><span data-l="th">อัปเดตปลั๊กอินได้โดยไม่ทับพาธหรือ alias ส่วนตัว push โค้ดได้โดยไม่หลุดข้อมูลเครื่อง Dispatcher เห็นทุกงานในจุดเดียวโดยไม่ต้องสแกนโฟลเดอร์ และกู้คืนงานที่สะดุดกลางทางได้จาก atomic phase checkpoint</span></dd></div></dl>
+    <p class="analogy"><strong><span data-l="en">Think of it like</span><span data-l="th">ลองนึกถึง</span></strong> <span data-l="en">A cookbook (plugin code), your pantry list (user config), and a central kitchen order board (work state) — updating the cookbook never erases your pantry or active orders.</span><span data-l="th">ตำราอาหาร (โค้ดปลั๊กอิน), รายการของในครัวคุณ (user config) และกระดานออเดอร์กลางในครัว (work state) — อัปเดตตำราใหม่ไม่ทำให้รายการของในครัวหรือออเดอร์ที่เปิดอยู่หาย</span></p>
+  </header>
+  <div class="dg"><figure class="diagram"><span class="diagram-frame" style="max-width:1120px"><svg xmlns="http://www.w3.org/2000/svg" id="concept-c4" viewBox="0 0 1120 356" role="img" aria-labelledby="concept-c4-title concept-c4-desc" style="max-width:1120px">
+<title id="concept-c4-title">C4 Three Separated Stores and Live Reconciliation</title>
+<desc id="concept-c4-desc">Plugin code stays read-only in the marketplace cache, personal user config stays external or gitignored outside version control, and per-work state lives in .devbench/state.json while reconciling against live Herdr state on every status or resume.</desc>
+<defs>
+  <marker id="concept-c4-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5E5D59" /></marker>
+  <marker id="concept-c4-arrow-new" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#1F6FA8" /></marker>
+  <marker id="concept-c4-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#D97757" /></marker>
+</defs>
+<rect width="100%" height="100%" fill="#FAF9F5" />
+<text x="24" y="28" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.1em">C4 · THREE SEPARATED STORES &amp; LIVE RECONCILIATION</text>
+
+
+<path d="M180 128 V164 a8 8 0 0 0 8 8 H412" fill="none" stroke="#1F6FA8" stroke-width="1.8" marker-end="url(#concept-c4-arrow-new)" />
+<path d="M520 128 V204" fill="none" stroke="#1F6FA8" stroke-width="1.8" marker-end="url(#concept-c4-arrow-new)" />
+<path d="M860 128 V164 a8 8 0 0 1 -8 8 H628" fill="none" stroke="#1F6FA8" stroke-width="1.8" marker-end="url(#concept-c4-arrow-new)" />
+
+
+<path d="M840 236 H628" fill="none" stroke="#D97757" stroke-width="2" marker-end="url(#concept-c4-arrow-accent)" />
+
+
+<rect x="236" y="148" width="100" height="16" rx="2" fill="#FAF9F5" />
+<text x="286" y="160" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">READ-ONLY CODE</text>
+
+<rect x="528" y="156" width="84" height="16" rx="2" fill="#FAF9F5" />
+<text x="532" y="168" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.06em">USER PATHS</text>
+
+<rect x="692" y="148" width="124" height="16" rx="2" fill="#FAF9F5" />
+<text x="754" y="160" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">ATOMIC R/W LOCK</text>
+
+<rect x="656" y="212" width="156" height="16" rx="2" fill="#FAF9F5" />
+<text x="734" y="224" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">LIVE TRUTH RECONCILE</text>
+
+
+<rect x="40" y="56" width="280" height="72" rx="6" fill="#FAF9F5" />
+<rect x="40" y="56" width="280" height="72" rx="6" fill="#CFE4F5" stroke="#1F6FA8" stroke-width="1.2" />
+<text x="180" y="84" fill="#0B3D63" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">1 · Plugin code</text>
+<text x="180" y="106" fill="#0B3D63" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">NRdeARK/devbench + config.example</text>
+
+<rect x="380" y="56" width="280" height="72" rx="6" fill="#FAF9F5" />
+<rect x="380" y="56" width="280" height="72" rx="6" fill="#CFE4F5" stroke="#1F6FA8" stroke-width="1.2" />
+<text x="520" y="84" fill="#0B3D63" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">2 · User config</text>
+<text x="520" y="106" fill="#0B3D63" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">~/.devbench/config.json</text>
+
+<rect x="720" y="56" width="280" height="72" rx="6" fill="#FAF9F5" />
+<rect x="720" y="56" width="280" height="72" rx="6" fill="#CFE4F5" stroke="#1F6FA8" stroke-width="1.2" />
+<text x="860" y="84" fill="#0B3D63" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">3 · Central work state</text>
+<text x="860" y="106" fill="#0B3D63" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">~/.devbench/state/works/&lt;slug&gt;.json</text>
+
+
+<rect x="412" y="204" width="216" height="64" rx="6" fill="#FAF9F5" />
+<rect x="412" y="204" width="216" height="64" rx="6" fill="#141413" stroke="#141413" stroke-width="1" />
+<text x="520" y="232" fill="#FAF9F5" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">devbench CLI</text>
+<text x="520" y="251" fill="#FAF9F5" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">status · resume · archive</text>
+
+<rect x="840" y="204" width="240" height="64" rx="6" fill="#FAF9F5" />
+<rect x="840" y="204" width="240" height="64" rx="6" fill="#EFEDE6" stroke="#B0AEA5" stroke-width="1" />
+<text x="960" y="232" fill="#3D3D3A" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Herdr (hc + app)</text>
+<text x="960" y="251" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">live runtime source of truth</text>
+
+
+<line x1="24" y1="304" x2="1096" y2="304" stroke="rgba(20,20,19,0.10)" stroke-width="1" />
+<text x="24" y="327" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.12em">LEGEND</text>
+<rect x="112" y="316" width="20" height="14" rx="2" fill="#CFE4F5" stroke="#1F6FA8" />
+<text x="140" y="327" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">separated store</text>
+<rect x="272" y="316" width="20" height="14" rx="2" fill="#EFEDE6" stroke="#B0AEA5" />
+<text x="300" y="327" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">live Herdr</text>
+<line x1="396" y1="323" x2="424" y2="323" stroke="#D97757" stroke-width="2" />
+<text x="432" y="327" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">reconciliation overrides stale IDs</text>
+</svg><button type="button" class="expand" aria-label="Expand diagram / ขยายไดอะแกรม"><svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M1 4V1h3M8 1h3v3M11 8v3H8M4 11H1V8" fill="none" stroke="currentColor" stroke-width="1.4"/></svg></button></span></figure></div>
+  <div class="tx">
+    <div data-l="en"><p>Plugin code (Rust binary + manifests) is read-only inside marketplace caches; user config carries schema_version and is checked against config.example.json without auto-overwriting; central work state lives at ~/.devbench/state/works/&lt;slug&gt;.json completely outside every git worktree, uses per-work locks and atomic renames, records operation phases for crash recovery, and drops a frozen snapshot into the archive folder on completion.</p></div><div data-l="th"><p>โค้ดปลั๊กอิน (Rust binary + manifest) เป็นแบบ read-only ใน marketplace cache; user config มี schema_version และตรวจเทียบกับ config.example.json โดยไม่เขียนทับอัตโนมัติ; central work state อยู่ที่ ~/.devbench/state/works/&lt;slug&gt;.json นอกทุก git worktree ใช้ per-work lock และ atomic rename บันทึก phase เพื่อกู้คืนเมื่อขัดข้อง และวาง frozen snapshot ในโฟลเดอร์ archive เมื่อจบงาน</p></div>
+    <p class="muted"><span data-l="en">New terms</span><span data-l="th">คำศัพท์ใหม่</span>: <span data-l="en">plugin code, config template, user config, work state, live reconciliation, phase checkpoint</span><span data-l="th">plugin code, config template, user config, work state, live reconciliation, phase checkpoint</span></p>
+    <span class="muted"><span data-l="en">Related:</span><span data-l="th">ที่เกี่ยวข้อง:</span> <span class="ref">D4</span>, <span class="ref">D9</span>, <span class="ref">UC-01</span>, <span class="ref">UC-04</span>, <span class="ref">UC-07</span>, <span class="ref">CMP-PLUGIN</span>, <span class="ref">CMP-CONFIG</span>, <span class="ref">CMP-STATE</span></span>
+  </div>
+</article>
+  </div>
+</div>
+
+
+
+
+
+
+
+
+</main>
+<footer><span data-l="en">updated</span><span data-l="th">อัปเดตเมื่อ</span> 2026-11-22 · ca5e424</footer>
+<div class="viewer" id="viewer" role="dialog" aria-modal="true" aria-labelledby="viewer-caption" hidden>
+  <div class="viewer-bar">
+    <span class="viewer-caption" id="viewer-caption"></span>
+    <span class="viewer-legend" id="viewer-legend" hidden></span>
+    <div class="viewer-tools">
+      <span class="layout-seg" role="group" aria-label="Layout / รูปแบบการจัดวาง" hidden><button type="button" data-viewer="layout-side" aria-pressed="false" aria-label="Side by side / เคียงข้างกัน"><span data-l="en">Side by side</span><span data-l="th">เคียงข้างกัน</span></button><button type="button" data-viewer="layout-stack" aria-pressed="false" aria-label="Top / bottom / บน / ล่าง"><span data-l="en">Top / bottom</span><span data-l="th">บน / ล่าง</span></button></span>
+      <button type="button" data-viewer="sync-zoom" aria-pressed="false" aria-label="Sync zoom / ซิงก์ซูม" hidden><span data-l="en">Sync zoom</span><span data-l="th">ซิงก์ซูม</span></button>
+      <button type="button" data-viewer="sync-pan" aria-pressed="false" aria-label="Sync pan / ซิงก์การเลื่อน" hidden><span data-l="en">Sync pan</span><span data-l="th">ซิงก์การเลื่อน</span></button>
+      <button type="button" data-viewer="out" aria-label="Zoom out / ซูมออก">&minus;</button>
+      <button type="button" data-viewer="reset" aria-label="Fit / พอดีจอ"><span data-l="en">Fit</span><span data-l="th">พอดีจอ</span></button>
+      <button type="button" data-viewer="in" aria-label="Zoom in / ซูมเข้า">+</button>
+      <button type="button" data-viewer="close" aria-label="Close / ปิด">&times;</button>
+    </div>
+  </div>
+  <div class="viewer-panes">
+    <div class="viewer-pane" data-pane="0"><span class="pane-label" hidden></span><div class="viewer-stage" id="viewer-stage"><div class="viewer-img"></div></div></div>
+    <div class="viewer-pane" data-pane="1" hidden><span class="pane-label" hidden></span><div class="viewer-stage"><div class="viewer-img"></div></div></div>
+  </div>
+</div>
+</body>
+</html>

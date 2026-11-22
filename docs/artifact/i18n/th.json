@@ -1,0 +1,496 @@
+{
+  "intent": {
+    "source_hash": "7e3e157ce5ab",
+    "text": {
+      "what": "ปลั๊กอินแบบ multi-agent ที่แจกจ่ายจาก GitHub marketplace repository ของตัวเอง (`NRdeARK/devbench`) สำหรับ Antigravity, Claude Code และ Codex สร้างบน `herdr-core` (`hc`) และ `herdr-app` เพื่อจัดโครงสร้างงานตามลำดับชั้นเอเจนต์ **Dispatcher → Owner → (domain) worker** (โดยแยก **sub-agent** แบบชั่วคราวไว้ใน delegation layer ของมันเอง) สำหรับแต่ละงาน Dispatcher จะสร้างโฟลเดอร์งานกลางใต้ work root ที่ผู้ใช้ตั้งค่าไว้ พร้อม git worktree แยกสำหรับแต่ละ repo เป้าหมาย เปิด session แบบคงอยู่ของ Owner และ domain worker ใน Herdr workspace, tab หรือ side pane บันทึกสถานะงานควบคู่กับ native AI session ID และสถานะของแต่ละ session และ archive โฟลเดอร์งานทั้งหมดได้เมื่อจบงาน",
+      "why": "การรันเอเจนต์หลายตัวด้วยมือทำให้ต้องเปิด pane เอง ตั้งค่า git worktree แยกทีละ repo และมักหลงทางว่า AI session ไหนรับผิดชอบงานหรือโดเมนใด การทำเป็นปลั๊กอินชื่อกลางแบบข้ามเอเจนต์ที่แยกโค้ดปลั๊กอินออกจาก config ผู้ใช้อย่างชัดเจน จะเปลี่ยนคำสั่งเดียวให้เป็นโฟลเดอร์งานหลาย repo ที่กลับมาทำต่อได้ มีลำดับชั้น session ชัดเจน ติดตามสถานะได้แม่นยำ และ archive ได้ในขั้นตอนเดียว",
+      "before": "ปัจจุบันผู้ใช้ต้องเปิด Herdr pane หรือเทอร์มินัลเอง เข้าไปยังแต่ละ repo และพิมพ์คำสั่งดิบเพื่อเปิดแต่ละ agent session\n- การวาง Owner หรือ domain-worker session ใน workspace ใหม่, tab ใหม่ หรือ split pane พร้อมสร้าง git worktree แยกแต่ละ repo ต้องทำซ้ำด้วยมือทุกครั้ง\n- งานหลาย repo ทิ้ง branch กระจัดกระจาย ไม่มีโฟลเดอร์งานกลางหรือบันทึกสถานะงาน, Herdr pane ID และ native AI session ID สำหรับตรวจสอบหรือกลับมาทำต่อ\n- การเช็กว่า agent session ไหนเสร็จแล้วหรือติดปัญหาต้องไล่เปิดดูทีละเทอร์มินัล\n- ลอจิกการประสานงาน สคริปต์ช่วยงาน และ config ส่วนตัวของเครื่องปะปนกันใน local skill แทนที่จะแยกชัดเจนระหว่าง plugin marketplace repo (ที่มีไฟล์ config template) กับ user config ที่อยู่ใน `.gitignore`",
+      "constraints": "- ต้องแพ็กเกจเป็น multi-agent plugin แบบ standalone ใน GitHub marketplace repository เฉพาะ (`NRdeARK/devbench` พร้อม `.antigravity-plugin/plugin.json`, `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` และรองรับ Codex skill)\n- ต้องแยก **โค้ดปลั๊กอิน** และ **ไฟล์ config template** ที่มีเวอร์ชันใน repo (ให้คนอื่นคัดลอกตามได้) ออกจาก **user config** (`~/.devbench/config.json` แบบ external-first ห้าม commit ขึ้น git: default work root, archive root, repo aliases และคำสั่ง agent CLI เริ่มต้น) และ **central runtime work state** (`~/.devbench/state/works/<slug>.json` เพื่อให้ Dispatcher ตรวจสอบได้ทันที) อย่างเคร่งครัด\n- ต้องจำลอง persistent session ตามลำดับชั้น **Dispatcher → Owner → (domain) worker** ด้วยความสัมพันธ์ **1 work : 1 Herdr workspace** (Owner และ domain worker อยู่ใน tab หรือ split pane ของ workspace เฉพาะงานนั้น) โดยบันทึกสถานะระดับงาน (work status, Herdr workspace ID, target repos, worktree paths/branches) และสถานะระดับ session (tier/role, domain, harness, Herdr session/pane ID, native AI session ID, session status) เพื่อให้ตรวจสอบและ resume งานต่อได้แม้รีสตาร์ตหรือเปลี่ยนอุปกรณ์\n- ต้องจัดการเทอร์มินัลแบบคงอยู่และการส่งข้อความผ่าน `herdr-core` (`hc`) และจัดวางหน้าต่างผ่าน `herdr-app` โดยทำงานได้อย่างราบรื่นบน Windows และทุกแพลตฟอร์มที่มี `hc` และ `git`\n- ต้องคงการสร้าง session ให้เรียบง่ายและแยกขาดจากทั้งเรื่อง ephemeral **sub-agent** quota routing และตาราง work-type → harness/model อัตโนมัติ (เลื่อนออกจาก v1 ไปก่อน โดยเปิด agent CLI ตามที่ร้องขอหรือค่าเริ่มต้นใน config โดยตรง)\n- ต้องปิด Herdr pane และ workspace ของงานนั้น ถอด git worktree อย่างเรียบร้อย และ archive โฟลเดอร์งานทั้งหมด (รวมถึง state ที่บันทึกไว้) เมื่อผู้ใช้ยืนยันโดยไม่ทำให้ไฟล์ที่ยังไม่ commit สูญหาย และไม่กระทบ Herdr workspace ของงานอื่น",
+      "outcome": "ผู้ใช้ติดตั้ง `devbench` จาก plugin marketplace repo กรอก user config ที่อยู่ใน `.gitignore` จากไฟล์ template ที่เตรียมไว้ แล้วสั่งงานครั้งเดียวให้ Dispatcher `devbench` จะสร้างโฟลเดอร์งานกลางใต้ work root ที่ตั้งค่าไว้พร้อม git worktree สำหรับแต่ละ repo เป้าหมาย เปิด Owner และ domain-worker session ที่จำเป็นใน Herdr บันทึกสถานะงานและ AI session ID/สถานะเพื่อให้ติดตามหรือทำต่อได้ และ archive โฟลเดอร์งานทั้งหมดเมื่อเสร็จสิ้น"
+    }
+  },
+  "O1": {
+    "source_hash": "f08e18cf0ad6",
+    "text": {
+      "text": "จากคำสั่งเดียวถึง Dispatcher devbench สร้างโฟลเดอร์งานกลางสำหรับหลาย repo พร้อม git worktree เปิด Owner และ domain-worker session แบบคงอยู่ใน Herdr ติดตาม Herdr และ AI session ID/สถานะเพื่อให้ resume ต่อได้ และ archive โฟลเดอร์งานทั้งหมดได้อย่างเรียบร้อยเมื่อจบงาน"
+    }
+  },
+  "UC-01": {
+    "source_hash": "7da50c11cbc3",
+    "text": {
+      "title": "ตั้งค่า devbench จากไฟล์ template",
+      "summary": "ผู้ใช้ติดตั้ง devbench จาก marketplace repo แล้วตั้งค่า user config แบบ external-first (~/.devbench/config.json หรือ $DEVBENCH_CONFIG) จากไฟล์ template ที่ commit ไว้ โดยระบุ work root, archive root, repo aliases และคำสั่ง agent CLI เริ่มต้น",
+      "flows.0.title": "สร้างและตรวจสอบ external user config สำเร็จ",
+      "flows.0.touchpoints.0.sees": "สรุปผลตรวจสอบยืนยันพาธ config, work root, repo aliases และคำสั่ง agent เริ่มต้น",
+      "flows.1.title": "ไฟล์ JSON ผิดรูปแบบหรือขาดฟิลด์จำเป็น",
+      "flows.1.touchpoints.0.sees": "ระบุบรรทัด/คอลัมน์ JSON หรือชื่อฟิลด์ที่ขาดอย่างชัดเจนโดยไม่เขียนทับไฟล์เดิม",
+      "flows.2.title": "พาธ repo ที่ตั้งไว้ไม่พบหรือไม่ใช่ Git repo",
+      "flows.2.touchpoints.0.sees": "รายการ repo alias และพาธที่มีปัญหาให้แก้ไขก่อนรัน devbench new",
+      "flows.3.title": "มีการตั้งค่าตัวแปรสภาพแวดล้อม DEVBENCH_CONFIG",
+      "flows.3.touchpoints.0.sees": "init และการตรวจสอบชี้ไปที่พาธ DEVBENCH_CONFIG แทน ~/.devbench/config.json",
+      "flows.4.title": "มีไฟล์ user config อยู่แล้ว",
+      "flows.4.touchpoints.0.sees": "คงไฟล์ config เดิมไว้ครบถ้วน และแสดงเฉพาะคีย์ใหม่ที่เพิ่มใน template"
+    }
+  },
+  "UC-02": {
+    "source_hash": "ce4f159b5def",
+    "text": {
+      "title": "ตั้งค่า workspace งาน",
+      "summary": "ผู้ใช้เริ่มงานที่มีชื่อพร้อมระบุ repo เป้าหมายหนึ่งหรือหลายตัว แล้ว devbench ตรวจ preflight ทุก repo สร้างโฟลเดอร์ workspace กลางใต้ work root ที่ตั้งค่าไว้ สร้าง git worktree และ task branch แยกให้แต่ละ repo และเขียน work state ไว้ที่ส่วนกลาง",
+      "flows.0.title": "สร้างโฟลเดอร์ workspace, repo worktree และ central state สำเร็จ",
+      "flows.0.touchpoints.0.sees": "พาธโฟลเดอร์งานกลาง ชื่อ task branch พาธ worktree และบันทึกสถานะ active",
+      "flows.1.title": "Preflight ไม่ผ่าน (alias ไม่รู้จัก, branch ซ้ำ หรือโฟลเดอร์ชน)",
+      "flows.1.touchpoints.0.sees": "เหตุผลที่ล้มเหลวของ repo/branch/โฟลเดอร์ โดยไม่มีการสร้างโฟลเดอร์หรือ worktree ใดๆ",
+      "flows.2.title": "สร้าง worktree ของ repo ที่ 2 ล้มเหลวกลางทาง",
+      "flows.2.touchpoints.0.sees": "rollback worktree ของ repo ที่ 1 เรียบร้อย ตั้งสถานะ state เป็น failed และรายงานข้อผิดพลาด",
+      "flows.3.title": "ชื่อสงวนบน Windows, ชื่อชนแบบไม่สนตัวพิมพ์ หรือพาธยาวเกิน",
+      "flows.3.touchpoints.0.sees": "แนะนำ slug ที่ปลอดภัยหรือหยุดก่อนชนข้อจำกัดชื่อสงวนและ 260 ตัวอักษรของ Windows",
+      "flows.4.title": "repo ต้นทางมีไฟล์แก้ค้างหรือใส่ alias ซ้ำ",
+      "flows.4.touchpoints.0.sees": "ตัด alias ซ้ำ แตก worktree สะอาดจาก base_ref และบันทึก base_sha ลง state"
+    }
+  },
+  "UC-03": {
+    "source_hash": "9743fe0db137",
+    "text": {
+      "title": "เปิด Owner หรือ domain-worker session และบันทึก AI session ID",
+      "summary": "Dispatcher (หรือ Owner) เปิดหรือใช้ Herdr workspace แบบ 1:1 ของงานนั้นผ่าน herdr-app รัน Owner (pane หลัก) หรือ domain-worker session (tab หรือ side pane) ผ่าน herdr-core ด้วย --outlive-parent และ label herdr.space=<id> ตรวจสอบ first_message.sent และบันทึก session ID ทั้ง 3 ชนิดพร้อม cwd ไว้ที่ส่วนกลาง",
+      "flows.0.title": "เปิด Owner หรือ domain-worker session และบันทึกสถานะสำเร็จ",
+      "flows.0.touchpoints.0.sees": "ข้อความยืนยัน role/domain, Herdr workspace แบบ 1:1 และ pane, hc terminal ID และ AI session ID ที่บันทึกไว้",
+      "flows.1.title": "เอเจนต์หยุดรอที่หน้าต่างยืนยันสิทธิ์ (first_message.sent=false)",
+      "flows.1.touchpoints.0.sees": "ตั้งสถานะเป็น blocked พร้อมตัวอย่างหน้าจอจาก hc read โดยไม่ส่งข้อความซ้ำมั่วหรือไม่ใช้ --force ข้ามสิทธิ์",
+      "flows.2.title": "herdr-app หรือ herdr-core ไม่ทำงาน หรือเปิดล้มเหลวหลัง space.new",
+      "flows.2.touchpoints.0.sees": "เก็บกวาด space ที่ค้างถ้าสร้างไปแล้ว ตั้งสถานะ failed และแจ้งให้เปิด Herdr ก่อน",
+      "flows.3.title": "เทอร์มินัลเป้าหมาย db-<slug>-<role> กำลังรันอยู่แล้ว",
+      "flows.3.touchpoints.0.sees": "โฟกัสและใช้เทอร์มินัลที่รันอยู่เดิมแบบ idempotent โดยไม่เปิดเอเจนต์ซ้ำซ้อน",
+      "flows.4.title": "ยังไม่สามารถดึง native AI session ID ตอนเปิดได้ (เช่น agy หรือ rollout ล่าช้า)",
+      "flows.4.touchpoints.0.sees": "เปิดงานสำเร็จด้วย capture=pending|manual ให้ Dispatcher bind หรือส่ง ID ภายหลังตอน resume ได้"
+    }
+  },
+  "UC-04": {
+    "source_hash": "21c4d0f1b5d7",
+    "text": {
+      "title": "ตรวจสอบและ resume งานหรือ AI session",
+      "summary": "ผู้ใช้ดูรายการทุกงานจากโฟลเดอร์ state กลางที่ reconcile กับ Herdr สด ส่งข้อความสั่งงานต่อ หรือ resume session ที่พักไว้หรือหลุดการเชื่อมต่อโดยตรวจซ้ำ native AI session ID ที่บันทึกไว้ (หรือรับ ID ที่ส่งมาตรงๆ) ใน cwd เดิม",
+      "flows.0.title": "reconcile สถานะงานกลางและ resume session สำเร็จ",
+      "flows.0.touchpoints.0.sees": "ตารางสถานะงาน/session ที่ reconcile แล้ว และ pane เอเจนต์ที่โฟกัสหรือ resume กลับมาทำงานต่อ",
+      "flows.1.title": "hc terminal หายหลังรีบูต (not_found หรือ finished)",
+      "flows.1.touchpoints.0.sees": "สร้าง space ใหม่หากหายไป และเปิด harness ด้วยคำสั่ง resume พร้อม session ID ที่บันทึกหรือส่งมาใน cwd เดิม",
+      "flows.2.title": "session ติดหน้าต่างยืนยันสิทธิ์ หรือไม่พบโฟลเดอร์ worktree",
+      "flows.2.touchpoints.0.sees": "แจ้งเตือนให้คนตรวจสอบพร้อมข้อความหน้าจอหรือพาธ worktree ที่หาย โดยไม่บังคับข้าม prompt",
+      "flows.3.title": "hc terminal ยังรันอยู่ (แม้จะซ่อนอยู่)",
+      "flows.3.touchpoints.0.sees": "เชื่อมต่อกลับและโฟกัสเทอร์มินัลเดิมผ่าน herdr-app โดยไม่เปิด session ซ้ำ",
+      "flows.4.title": "เปิด state บนเครื่องอื่นที่ไม่มีประวัติ AI ในเครื่อง",
+      "flows.4.touchpoints.0.sees": "แจ้งทางเลือกสำรองอย่างนุ่มนวล: สร้าง worktree จาก git branch และเปิด session ใหม่พร้อม handoff note"
+    }
+  },
+  "UC-05": {
+    "source_hash": "fa54c9315414",
+    "text": {
+      "title": "Archive โฟลเดอร์งานที่เสร็จแล้ว",
+      "summary": "เมื่อผู้ใช้ยืนยันว่างานจบแล้ว devbench ตรวจสอบไฟล์แก้ค้าง/untracked/unpushed/ignored ปิด Herdr workspace แบบ 1:1 และเทอร์มินัลที่บันทึกไว้ก่อนเพื่อปล่อยไฟล์ล็อกบน Windows ถอด git worktree ที่สะอาดโดยคง branch ไว้ เขียน frozen state snapshot + สรุป git และย้ายโฟลเดอร์ไปยัง archive root",
+      "flows.0.title": "ปิด Herdr workspace ถอด worktree และ archive โฟลเดอร์สำเร็จ",
+      "flows.0.touchpoints.0.sees": "ข้อความยืนยัน Herdr workspace ที่ปิดแล้ว ค่า SHA ของ branch ที่เก็บไว้ frozen snapshot และพาธ archive สุดท้าย",
+      "flows.1.title": "พบไฟล์แก้ค้างหรือ untracked ใน worktree",
+      "flows.1.touchpoints.0.sees": "บล็อกการ archive ก่อนปิด Herdr แสดงรายการพาธที่มีปัญหา พร้อมตัวเลือก --snapshot-wip (ไม่ force เงียบๆ)",
+      "flows.2.title": "ติดไฟล์ล็อกบน Windows หรือการย้ายข้ามไดรฟ์สะดุดกลางทาง",
+      "flows.2.touchpoints.0.sees": "บันทึก checkpoint archive_phase ลง state กลาง การรันซ้ำจะทำต่อจากขั้นตอนที่ค้างได้อย่างปลอดภัย",
+      "flows.3.title": "เรียก archive จากภายใน Herdr workspace ของงานนั้นเอง",
+      "flows.3.touchpoints.0.sees": "flush state อย่างปลอดภัยและเตือนให้ปิด workspace ตัวเองเป็นขั้นสุดท้ายหรือรันจาก Dispatcher",
+      "flows.4.title": "Herdr space ถูกปิดไปแล้วหรือชื่อโฟลเดอร์ archive ชนกัน",
+      "flows.4.touchpoints.0.sees": "ยอมรับ Herdr ID เก่าที่หายไป ต่อท้าย timestamp เมื่อชื่อชน และไม่กระทบ space ของงานอื่น"
+    }
+  },
+  "UC-06": {
+    "source_hash": "35f66d81460a",
+    "text": {
+      "title": "รักษา main Git checkout ให้สะอาดและไม่ชนกัน",
+      "summary": "repo ในเครื่องยังคงใช้งานตามปกติควบคู่กับ worktree ของ devbench ได้ ป้องกันการชนกันของ branch ที่ถูก checkout ซ้ำ เตือนไฟล์ ignored ก่อนลบ และ prune ข้อมูล git worktree ให้สะอาดหลัง archive",
+      "flows.0.title": "repo ต้นทางยังสะอาดหลังจบวงจร worktree",
+      "flows.0.touchpoints.0.sees": "git worktree list ไม่มีรายการค้าง และ main checkout ไม่ถูกกระทบ",
+      "flows.1.title": "branch เป้าหมายถูก checkout อยู่ใน main repo แล้ว",
+      "flows.1.touchpoints.0.sees": "หยุดก่อนกระทบ main checkout และแนะนำให้ใช้ชื่อ task branch ที่ไม่ซ้ำ",
+      "flows.2.title": "มีไฟล์ที่อยู่ใน .gitignore (เช่น .env) ภายใน worktree",
+      "flows.2.touchpoints.0.sees": "แสดงรายการไฟล์ ignored พร้อมคำเตือนก่อนที่ git worktree remove จะลบ checkout",
+      "flows.3.title": "โฟลเดอร์ worktree ถูกลบด้วยมือนอก devbench",
+      "flows.3.touchpoints.0.sees": "git worktree prune ล้างข้อมูล .git/worktrees ที่ค้างอยู่อย่างสะอาด"
+    }
+  },
+  "UC-07": {
+    "source_hash": "b34850cc6a33",
+    "text": {
+      "title": "รักษา user config เมื่ออัปเดตปลั๊กอิน",
+      "summary": "การติดตั้งหรืออัปเดต devbench จาก marketplace repo ใน Antigravity, Claude Code หรือ Codex จะไม่แตะต้อง ~/.devbench/config.json ที่อยู่นอกโฟลเดอร์ cache แยกตามเวอร์ชัน และรายงานฟิลด์ใหม่ใน template ผ่าน config check",
+      "flows.0.title": "อัปเดตปลั๊กอินโดยไม่ทับ external user config",
+      "flows.0.touchpoints.0.sees": "ไฟล์ ~/.devbench/config.json เดิมยังอยู่ครบและผ่านการตรวจสอบ schema",
+      "flows.1.title": "เวอร์ชันใหม่เพิ่มคีย์จำเป็นหรือขยับ schema_version",
+      "flows.1.touchpoints.0.sees": "แสดงรายการคีย์ที่ขาดพร้อมตัวอย่างจาก config.example.json โดยไม่เขียนทับไฟล์ผู้ใช้โดยอัตโนมัติ",
+      "flows.2.title": "ตัวอัปเดต marketplace เขียนลงโฟลเดอร์ cache เวอร์ชันใหม่",
+      "flows.2.touchpoints.0.sees": "โฟลเดอร์ cache ใหม่อ่าน ~/.devbench/config.json ภายนอกไฟล์เดิมได้ทันที",
+      "flows.3.title": "ผู้พัฒนามีไฟล์ local config.json ที่อยู่ใน .gitignore ใน repo clone",
+      "flows.3.touchpoints.0.sees": "external config มีลำดับความสำคัญสูงสุด ส่วนไฟล์ local ใน repo ใช้เฉพาะโหมดพัฒนาสำรอง"
+    }
+  },
+  "CMP-SYS": {
+    "source_hash": "59e69f48d5a2",
+    "text": {
+      "what": "ปลั๊กอินแบบ multi-agent และ marketplace repository แบบ standalone ที่ใช้ลำดับชั้น Dispatcher -> Owner -> (domain) worker พร้อมโฟลเดอร์งานกลางต่อ task, git worktree, Herdr session, ที่เก็บ work/AI session state แบบรวมศูนย์ และ archive ในขั้นตอนเดียว",
+      "why": "แทนที่การตั้งค่า Herdr pane ด้วยมือ การจัดการ git worktree แบบเฉพาะหน้า และ AI session ID ที่สูญหาย ด้วยเวิร์กโฟลว์ข้ามเอเจนต์ที่ทำซ้ำได้"
+    }
+  },
+  "CMP-PLUGIN": {
+    "source_hash": "4fd9eba77ea3",
+    "text": {
+      "what": "แพ็กเกจปลั๊กอินข้ามเอเจนต์ (.antigravity-plugin, .claude-plugin + marketplace, Codex skill) และ native Rust CLI binary เดียว (devbench) ที่ประสานการตรวจ config, การเปิด Herdr space/terminal, adapter ดึง AI session ID แยกตาม harness และการ reconcile สถานะสด",
+      "why": "แพ็กเกจเวิร์กโฟลว์เป็น marketplace repository ที่มีเวอร์ชันชัดเจนโดยไม่มี runtime dependency เปิดเร็วต่ำกว่า 5ms และจัดการ argv subprocess บน Windows ได้ปลอดภัย",
+      "diagrams.flowchart.0.title": "ลำดับการ resume session และตรวจสอบ AI session ID ซ้ำ"
+    }
+  },
+  "CMP-CONFIG": {
+    "source_hash": "6b537076c3bb",
+    "text": {
+      "what": "user config แบบ external-first ($DEVBENCH_CONFIG -> ~/.devbench/config.json พร้อม local fallback ที่อยู่ใน .gitignore สำหรับโหมด dev) ที่สร้างจาก templates/config.example.json เพื่อเก็บ default work root, archive root, repo aliases และคำสั่ง agent CLI เริ่มต้น",
+      "why": "แยกพาธเครื่องส่วนตัวและค่า CLI เริ่มต้นออกจากโค้ดปลั๊กอินที่เป็นกลาง แชร์ config เดียวกันระหว่าง agy/claude/codex และรอดจากการอัปเดต marketplace cache ที่แยกตามเวอร์ชัน",
+      "data_dictionary.tables.0.columns.0.meaning": "เวอร์ชันของ config schema ที่ devbench config check ใช้ตรวจเมื่ออัปเดตปลั๊กอิน",
+      "data_dictionary.tables.0.columns.1.meaning": "โฟลเดอร์แม่ที่แต่ละงานที่กำลังทำจะได้โฟลเดอร์ <work_root>/<slug>/ ของตัวเอง",
+      "data_dictionary.tables.0.columns.2.meaning": "โฟลเดอร์ปลายทางที่ย้ายโฟลเดอร์งานที่เสร็จแล้วไปเก็บหลังถอด worktree",
+      "data_dictionary.tables.0.columns.3.meaning": "คำนำหน้าชื่อ git task branch ที่สร้างอัตโนมัติ (เช่น devbench/<slug>)",
+      "data_dictionary.tables.0.columns.4.meaning": "คีย์ใน config.agents ที่ใช้เมื่อคำสั่ง spawn ไม่ได้ระบุ harness",
+      "data_dictionary.tables.1.columns.0.meaning": "ชื่อย่อของ repo ที่ส่งเข้าคำสั่ง devbench new --repos",
+      "data_dictionary.tables.1.columns.1.meaning": "พาธแบบเต็มหรือขึ้นต้นด้วย ~ ไปยัง source Git repository ในเครื่อง",
+      "data_dictionary.tables.1.columns.2.meaning": "branch หรือ ref ตั้งต้นที่ใช้ตอนแตก task worktree ใหม่",
+      "data_dictionary.tables.2.columns.0.meaning": "ชื่อ agent CLI ที่เลือกใช้ได้ตอน spawn",
+      "data_dictionary.tables.2.columns.1.meaning": "อาร์เรย์คำสั่งที่ส่งตรงเข้า hc run (ไม่ผ่านการแยกสตริง shell; Codex มี --no-daemon)",
+      "data_dictionary.tables.2.columns.2.meaning": "เทมเพลต argv ที่มีตัวแทน {session_id} สำหรับ resume session ที่หยุดไปแล้ว",
+      "data_dictionary.tables.2.columns.3.meaning": "กลยุทธ์ที่ adapter ใช้ในการดึง native AI session ID",
+      "data_dictionary.tables.2.columns.3.values.0.meaning": "devbench สร้าง UUID ล่วงหน้าแล้วส่ง --session-id ตอนเปิด (Claude)",
+      "data_dictionary.tables.2.columns.3.values.1.meaning": "devbench สแกนไฟล์ rollout log ของ CLI ที่ตรงกับ cwd หลังเปิด (Codex)",
+      "data_dictionary.tables.2.columns.3.values.2.meaning": "ผู้ใช้หรือ Dispatcher ผูก ID ทีหลังตอน resume (agy / ทั่วไป)"
+    }
+  },
+  "CMP-WORKTREE": {
+    "source_hash": "11f43ef1a09a",
+    "text": {
+      "what": "ทำความสะอาด work slug ให้ปลอดภัยบน Windows/Unix ตรวจ preflight ทุก repo เป้าหมาย สร้างโฟลเดอร์งานกลางพร้อม git worktree และ task branch ตรวจสอบไฟล์แก้ค้าง/untracked/ignored และถอดพร้อม archive โฟลเดอร์งานที่จบแล้วอย่างเรียบร้อย",
+      "why": "แยกงานหลาย repo ที่ทำขนานกันไว้ในโฟลเดอร์เดียวต่อ task และ archive ในขั้นตอนเดียวได้อย่างปลอดภัยโดยไม่ทำ Git metadata พัง ไม่ชนไฟล์ล็อกบน Windows และไม่ทำไฟล์แก้สูญหาย",
+      "diagrams.flowchart.0.title": "ลำดับความปลอดภัยตอน Archive และการปล่อยไฟล์ล็อก"
+    }
+  },
+  "CMP-STATE": {
+    "source_hash": "d7994131d34b",
+    "text": {
+      "what": "ที่เก็บสถานะต่องานแบบรวมศูนย์ (~/.devbench/state/works/<slug>.json) พร้อม per-work file lock, atomic tmp+rename และ phase checkpoint เพื่อบันทึก work status, 1:1 Herdr workspace ID, repo เป้าหมาย, worktree paths/branches, Herdr pane/hc IDs และ native AI session IDs + cwd พร้อมคัดลอก frozen snapshot ลงโฟลเดอร์ archive เมื่อจบงาน",
+      "why": "ให้ Dispatcher มีดัชนีกลางของทุกงานที่กำลังทำและที่ archive แล้วทันทีโดยไม่ต้องสแกนโฟลเดอร์ ไม่แย่ง lock ข้ามงาน อยู่นอก git worktree โดยสมบูรณ์ และฟื้นตัวหลังขัดข้องได้สะอาด",
+      "data_dictionary.tables.0.columns.0.meaning": "รหัสเฉพาะที่ผ่านการทำความสะอาดแล้วสำหรับตั้งชื่อโฟลเดอร์งาน, Herdr space และไฟล์ state กลาง",
+      "data_dictionary.tables.0.columns.1.meaning": "ระยะวงจรชีวิตปัจจุบันของงาน",
+      "data_dictionary.tables.0.columns.1.values.0.meaning": "กำลังสร้าง worktree หรือเตรียมงานขั้นต้น",
+      "data_dictionary.tables.0.columns.1.values.1.meaning": "workspace พร้อมใช้งานสำหรับ Owner และ domain worker",
+      "data_dictionary.tables.0.columns.1.values.2.meaning": "กำลังรันขั้นตอน archive ดู archive_phase เพื่อหาจุดทำต่อ",
+      "data_dictionary.tables.0.columns.1.values.3.meaning": "ปิด Herdr ถอด worktree และย้ายโฟลเดอร์ไปยัง archive_root แล้ว",
+      "data_dictionary.tables.0.columns.1.values.4.meaning": "การตั้งค่าหรือการเปิดงานสะดุด ต้องตรวจสอบหรือล้างค้าง",
+      "data_dictionary.tables.0.columns.2.meaning": "จุด checkpoint ของขั้นตอน archive ล่าสุดที่ทำเสร็จ เพื่อให้รันซ้ำต่อได้แบบ idempotent",
+      "data_dictionary.tables.0.columns.2.values.0.meaning": "ปิด 1:1 Herdr space และ kill hc terminal ที่บันทึกไว้แล้ว",
+      "data_dictionary.tables.0.columns.2.values.1.meaning": "ถอดและ prune git worktree ทั้งหมดแล้ว",
+      "data_dictionary.tables.0.columns.2.values.2.meaning": "เขียนไฟล์ frozen state.snapshot.json และสรุป git แล้ว",
+      "data_dictionary.tables.0.columns.2.values.3.meaning": "ย้ายโฟลเดอร์ไปยัง archive_root เรียบร้อย",
+      "data_dictionary.tables.0.columns.3.meaning": "รหัส 1:1 Herdr workspace ประจำเครื่องที่ reconcile กับ herdr-app ls สด",
+      "data_dictionary.tables.0.columns.4.meaning": "พาธโฟลเดอร์งานกลางที่กำลังทำ (<work_root>/<slug>) สำหรับเก็บ worktree และโน้ต",
+      "data_dictionary.tables.0.columns.5.meaning": "พาธปลายทางใต้ archive_root เมื่อ archive เสร็จสิ้น",
+      "data_dictionary.tables.1.columns.0.meaning": "ชื่อย่อของ repo จาก config.repos",
+      "data_dictionary.tables.1.columns.1.meaning": "พาธ worktree ของ repo นี้ภายในโฟลเดอร์งานกลาง",
+      "data_dictionary.tables.1.columns.2.meaning": "task branch ที่ยังคงเก็บไว้ใน source repo แม้หลัง archive ถอด worktree ออกแล้ว",
+      "data_dictionary.tables.1.columns.3.meaning": "commit SHA ตั้งต้นตอนแตก worktree",
+      "data_dictionary.tables.1.columns.4.meaning": "branch tip SHA ที่บันทึกไว้ก่อนถอด worktree ตอน archive",
+      "data_dictionary.tables.2.columns.0.meaning": "รหัสบทบาทภายในงาน (owner หรือ worker-<domain>)",
+      "data_dictionary.tables.2.columns.1.meaning": "ระดับ persistent session ที่ devbench ดูแล (ไม่รวม ephemeral sub-agent)",
+      "data_dictionary.tables.2.columns.1.values.0.meaning": "ผู้ประสานงานหลักของงานใน pane หลักของ workspace",
+      "data_dictionary.tables.2.columns.1.values.1.meaning": "ผู้เชี่ยวชาญเฉพาะโดเมนใน tab หรือ split pane ภายใน workspace เดียวกัน",
+      "data_dictionary.tables.2.columns.2.meaning": "โฟลเดอร์ทำงาน (cwd) ที่ใช้ตอนเปิด จำเป็นเพราะการ resume ของ Claude และ Codex ผูกกับ cwd",
+      "data_dictionary.tables.2.columns.3.meaning": "ที่อยู่เทอร์มินัลของ herdr-core (เช่น t7) ที่ reconcile สดผ่าน hc get",
+      "data_dictionary.tables.2.columns.4.meaning": "รหัส pane ที่แสดงผลใน herdr-app ภายใน 1:1 workspace",
+      "data_dictionary.tables.2.columns.5.meaning": "รหัสบทสนทนาของ AI CLI ต้นทางสำหรับใช้ resume หรือตรวจซ้ำ",
+      "data_dictionary.tables.2.columns.6.meaning": "วิธีการที่ได้ native AI session ID มา",
+      "data_dictionary.tables.2.columns.6.values.0.meaning": "กำหนดล่วงหน้าหรือสแกนอัตโนมัติโดย adapter ของ harness",
+      "data_dictionary.tables.2.columns.6.values.1.meaning": "ผูกค่าด้วยตนเองโดยผู้ใช้หรือ Dispatcher",
+      "data_dictionary.tables.2.columns.6.values.2.meaning": "ยังไม่ได้เก็บ ID โดยไม่บล็อกการเปิดงาน",
+      "data_dictionary.tables.2.columns.6.values.3.meaning": "harness นี้ไม่รองรับการ resume native session",
+      "data_dictionary.tables.2.columns.7.meaning": "สถานะ session ล่าสุดหลัง reconcile (สถานะสดจาก Herdr ชนะค่าที่แคชไว้เสมอ)",
+      "data_dictionary.tables.2.columns.7.values.0.meaning": "เปิดผ่าน hc แล้ว รอตรวจสอบ first_message.sent",
+      "data_dictionary.tables.2.columns.7.values.1.meaning": "กำลังทำงานอยู่ใน Herdr",
+      "data_dictionary.tables.2.columns.7.values.2.meaning": "ยังมีชีวิตอยู่และรอคำสั่งรอบถัดไป",
+      "data_dictionary.tables.2.columns.7.values.3.meaning": "หยุดรอหน้าต่างขอสิทธิ์หรือ trust dialog ต้องให้คนดำเนินการ",
+      "data_dictionary.tables.2.columns.7.values.4.meaning": "โปรเซสจบการทำงานปกติ สามารถ resume ด้วย native_session_id",
+      "data_dictionary.tables.2.columns.7.values.5.meaning": "hc terminal หายไปหลังรีบูตหรือรีสตาร์ต สามารถ resume ด้วย native_session_id",
+      "data_dictionary.tables.2.columns.7.values.6.meaning": "ถูกปิดเป็นส่วนหนึ่งของการ archive งาน"
+    }
+  },
+  "D1": {
+    "source_hash": "316576b2b86d",
+    "text": {
+      "title": "โครงสร้างโฟลเดอร์งานและ git worktree",
+      "choice_reason": "การรวม repo worktree ทั้งหมดของงานไว้ในโฟลเดอร์กลางเดียวใต้ work root ที่ตั้งค่าไว้ ทำให้ตรวจสอบงานหลาย repo และ archive ในขั้นตอนเดียวได้ง่ายมาก",
+      "options.0.title": "โฟลเดอร์กลางต่อ 1 งาน (<work-root>/<work-slug>/<repo>)",
+      "options.0.reason": "เก็บ repo worktree และโน้ตทั้งหมดของงานไว้ในโฟลเดอร์เดียวที่จบในตัวและ archive ได้ในขั้นตอนเดียว",
+      "options.0.pros": "รองรับหลาย repo, repo ต้นทางสะอาด, archive ในขั้นเดียว",
+      "options.0.cons": "ต้องตั้งค่า default work root path",
+      "options.0.cost": "ต่ำ",
+      "options.0.risk": "ต่ำ",
+      "options.1.title": "โฟลเดอร์ worktree ข้างๆ แต่ละ repo",
+      "options.1.reason": "ทำให้งานหลาย repo กระจัดกระจายข้ามหลายโฟลเดอร์และไม่สามารถ archive งานเป็นก้อนเดียวได้",
+      "options.1.pros": "ไม่ต้องกำหนด work root แยก",
+      "options.1.cons": "งานหลาย repo กระจัดกระจาย ต้องไล่เคลียร์ทีละ repo",
+      "options.1.cost": "ต่ำ",
+      "options.1.risk": "กลาง",
+      "options.2.title": "โฟลเดอร์ซ่อน .worktrees/ ภายในแต่ละ repo",
+      "options.2.reason": "ทำให้ repo ต้นทางรกด้วย checkout ซ้อนกันและจัดเก็บงานข้าม repo ไม่สะดวก",
+      "options.2.pros": "อยู่ติดกับตัว repo",
+      "options.2.cons": "ติดปัญหาเครื่องมือ .git ซ้อนกัน ไม่มีโฟลเดอร์กลางของงาน",
+      "options.2.cost": "ต่ำ",
+      "options.2.risk": "กลาง"
+    }
+  },
+  "D2": {
+    "source_hash": "f8e3496940ad",
+    "text": {
+      "title": "ลำดับชั้นเอเจนต์และการผูก Herdr workspace",
+      "choice_reason": "ลำดับชั้น 4 ระดับ (Dispatcher -> Owner -> domain worker -> sub-agent แยกอิสระ) พร้อมความสัมพันธ์ 1 work : 1 Herdr workspace ทำให้ความรับผิดชอบชัดเจนและปิด workspace ตอน archive ได้อย่างปลอดภัย",
+      "options.0.title": "Dispatcher -> Owner -> (domain) worker พร้อม 1 work : 1 Herdr workspace",
+      "options.0.reason": "ผูกแต่ละงานเข้ากับ Herdr workspace เฉพาะของตัวเอง (Owner ใน pane หลัก, domain worker ใน tab/pane ย่อย) และแยก sub-agent quota routing ไว้คนละชั้น",
+      "options.0.pros": "ความเป็นเจ้าของการทำงานชัด, ปิด workspace แบบ 1:1 ปลอดภัยตอน archive, แยกชั้น quota อิสระ",
+      "options.0.cons": "สร้าง 1 Herdr workspace ต่อ 1 งานที่เปิดอยู่",
+      "options.0.cost": "ต่ำ",
+      "options.0.risk": "ต่ำ",
+      "options.1.title": "เปิดเป็น tab รวมใน Herdr workspace เดียวกัน",
+      "options.1.reason": "ปนงานคนละเรื่องใน workspace เดียวและเสี่ยงเผลอปิด pane ของงานอื่นตอน archive",
+      "options.1.pros": "จำนวน Herdr workspace น้อยกว่า",
+      "options.1.cons": "tab รกและไม่ปลอดภัยเมื่อปิดทั้งชุดตอน archive",
+      "options.1.cost": "ต่ำ",
+      "options.1.risk": "สูง",
+      "options.2.title": "รวม sub-agent quota routing ไว้ใน devbench",
+      "options.2.reason": "นำเรื่องการจัดการ workspace/session ไปผูกกับกฎบิลลิ่งและ quota delegation ซึ่งควรอยู่คนละชั้น",
+      "options.2.pros": "ปลั๊กอินเดียวคุมทุกการเรียกเอเจนต์",
+      "options.2.cons": "ผูกกฎ quota ส่วนตัวเข้ากับปลั๊กอินสาธารณะที่เป็นกลาง",
+      "options.2.cost": "กลาง",
+      "options.2.risk": "กลาง"
+    }
+  },
+  "D3": {
+    "source_hash": "23bed69622f6",
+    "text": {
+      "title": "การเลือก harness และ model ตอนสร้าง session",
+      "choice_reason": "คง v1 ให้โฟกัสที่ workspace, session state และ archive ที่นิ่งก่อน แล้วค่อยกลับมาเพิ่มตารางแนะนำ harness/model ตามประเภทงานทีหลัง",
+      "options.0.title": "เลือก harness/CLI โดยตรง หรือใช้ค่าเริ่มต้นจาก config",
+      "options.0.reason": "ไม่ต้องเพิ่ม config ซับซ้อนใน v1 เปิด CLI ที่ร้องขอหรือค่าเริ่มต้นได้ทันที",
+      "options.0.pros": "เรียบง่าย คาดเดาได้ config schema กระชับ",
+      "options.0.cons": "ต้องระบุ harness เองเมื่อไม่ได้ใช้ค่าเริ่มต้น",
+      "options.0.cost": "ต่ำ",
+      "options.0.risk": "ต่ำ",
+      "options.1.title": "ตารางแนะนำ harness/model ตามประเภทงาน",
+      "options.1.reason": "มีประโยชน์มากเมื่อแกนหลักนิ่งแล้ว แต่ยังไม่จำเป็นใน v1",
+      "options.1.revisit_when": "หลังจากเวิร์กโฟลว์ตั้งค่า workspace, บันทึก session state และ archive ของ v1 ใช้งานจริงได้เสถียรแล้ว",
+      "options.1.pros": "เลือก harness/model ที่เหมาะกับงานให้อัตโนมัติ",
+      "options.1.cons": "เพิ่ม schema และการดูแลก่อนที่เวิร์กโฟลว์หลักจะนิ่ง",
+      "options.1.cost": "กลาง",
+      "options.1.risk": "ต่ำ"
+    }
+  },
+  "D4": {
+    "source_hash": "b8758b4b0458",
+    "text": {
+      "title": "ตำแหน่งเก็บ user config และความปลอดภัยตอนอัปเดตปลั๊กอิน",
+      "choice_reason": "External-first ($DEVBENCH_CONFIG -> ~/.devbench/config.json) ทำให้ agy, claude และ codex ใช้ config เดียวกันและรอดจากการอัปเดต marketplace cache ที่แยกตามเวอร์ชัน โดยยังมี fallback ใน repo ที่อยู่ใน .gitignore สำหรับโหมดพัฒนา",
+      "options.0.title": "External-first ($DEVBENCH_CONFIG -> ~/.devbench/config.json) + fallback ใน repo ที่อยู่ใน .gitignore สำหรับโหมด dev",
+      "options.0.reason": "ปลอดภัยจากการอัปเดต marketplace cache ทั้ง Claude/Antigravity/Codex แชร์ config เดียวกันข้ามทุก harness และยังรองรับ config.json ที่อยู่ใน .gitignore ตอนพัฒนาจาก clone",
+      "options.0.pros": "ไม่ถูกทับเมื่ออัปเดตปลั๊กอินจาก marketplace (Claude/agy สร้างโฟลเดอร์ cache แยกตามเวอร์ชัน) แต่ยังทดสอบ config.json ที่อยู่ใน .gitignore ใน repo ได้ คู่กับคำสั่ง devbench config check",
+      "options.0.cons": "มีลำดับการค้นหา 2 ชั้น (external มาก่อน repo-local)",
+      "options.0.cost": "ต่ำ",
+      "options.0.risk": "ต่ำ",
+      "options.1.title": "External config เท่านั้น (~/.devbench/config.json / DEVBENCH_CONFIG) โดยคัดลอกจาก config.example.json ที่ commit ไว้",
+      "options.1.reason": "ตัวเลือก A ใช้ external config เป็นค่าเริ่มต้นอยู่แล้ว พร้อมเก็บ local fallback ไว้เผื่อพัฒนาใน repo",
+      "options.1.pros": "พาธเดียวชัดเจน ไม่เสี่ยงค้างในโฟลเดอร์ cache ที่เปลี่ยนตามเวอร์ชัน และใช้แนวเดียวกับ diagram-design (~/.diagram-design)",
+      "options.1.cons": "ไฟล์ config อยู่นอกโฟลเดอร์ปลั๊กอินเสมอ",
+      "options.1.cost": "ต่ำ",
+      "options.1.risk": "ต่ำ",
+      "options.2.title": "config.json ที่อยู่ใน .gitignore ภายในโฟลเดอร์ปลั๊กอินเท่านั้น",
+      "options.2.reason": "การอัปเดตปลั๊กอินจาก marketplace สร้างโฟลเดอร์ cache แยกตามเวอร์ชัน (ยืนยันแล้วใน ~/.claude/plugins/cache/) ทำให้ local config ถูกทิ้งค้างหรือหาย",
+      "options.2.pros": "อยู่ข้างๆ config.example.json เมื่อพัฒนาจาก git clone ในเครื่อง",
+      "options.2.cons": "การอัปเดตปลั๊กอินจาก marketplace จะสร้าง cache โฟลเดอร์ใหม่และทิ้งหรือทับ local config เดิม",
+      "options.2.cost": "ต่ำ",
+      "options.2.risk": "สูง"
+    }
+  },
+  "D5": {
+    "source_hash": "d739d1cdae55",
+    "text": {
+      "title": "วิธีเก็บ native AI session ID สำหรับการ resume",
+      "choice_reason": "การเก็บแบบผสมพร้อมตรวจสอบซ้ำตอน resume ช่วยดึง ID อัตโนมัติเท่าที่รองรับ และให้ Dispatcher เสียบ ID ที่บันทึกไว้หรือรับจากผู้ใช้ตรงๆ ตอน resume โดยไม่บล็อกการเปิดงาน",
+      "options.0.title": "แบบผสม: adapter แยกตาม harness (Claude --session-id, Codex สแกน rollout + --no-daemon, agy manual bind) + ตรวจซ้ำหรือส่ง ID ตอน resume",
+      "options.0.reason": "เก็บแบบ best-effort ตอนเปิดพร้อม cwd ตรวจซ้ำใน central state ตอน resume (หรือรับ session ID ตรงจากผู้ใช้) ทำให้ไม่พังเมื่อ CLI เปลี่ยนแปลง",
+      "options.0.pros": "ดึงอัตโนมัติใน CLI ที่รองรับ ไม่บล็อกการเปิดงานเมื่อเจอ CLI ใหม่ (capture: auto|manual|pending|unavailable) และบันทึก cwd เพราะ Claude/Codex resume ผูกกับ cwd",
+      "options.0.cons": "ต้องดูแล adapter เล็กๆ แยกตามแต่ละ harness และ native ID ใช้ได้เฉพาะเครื่องเดิม (ข้ามเครื่องจะลดระดับเป็นการ checkout branch + handoff note)",
+      "options.0.cost": "กลาง",
+      "options.0.risk": "ต่ำ",
+      "options.1.title": "auto-capture จาก CLI อย่างเดียว (ไม่มี manual bind สำรอง)",
+      "options.1.reason": "เปราะบางเกินไปเมื่อ CLI ต้นทางเปลี่ยน flag หรือรูปแบบ log และไม่เปิดทางให้ส่ง session ID เอง",
+      "options.1.pros": "ประสบการณ์อัตโนมัติเต็มรูปแบบเมื่อทุก CLI และรูปแบบ log ตรงตามคาด",
+      "options.1.cons": "พังทันทีเมื่อ CLI ต้นทางเปลี่ยน flag หรือโครงสร้าง log",
+      "options.1.cost": "กลาง",
+      "options.1.risk": "สูง",
+      "options.2.title": "ให้เอเจนต์หรือผู้ใช้รายงานลง state อย่างเดียว",
+      "options.2.reason": "ทำให้เสีย session ID ทุกครั้งที่เอเจนต์ออกหรือพังก่อนรายงาน",
+      "options.2.pros": "ไม่ผูกติดกับรายละเอียดภายในของแต่ละ CLI",
+      "options.2.cons": "หากเอเจนต์ออกหรือพังก่อนรายงาน จะเสีย session ID",
+      "options.2.cost": "ต่ำ",
+      "options.2.risk": "กลาง"
+    }
+  },
+  "D6": {
+    "source_hash": "8a432e137d6e",
+    "text": {
+      "title": "การจัดการ worktree และ branch ตอน Archive",
+      "choice_reason": "ปิด Herdr ก่อนเพื่อปล่อยล็อกไฟล์บน Windows, บล็อกเมื่อมีไฟล์แก้ค้างเพื่อกันงานหาย (พร้อมตัวเลือก --snapshot-wip), และถอด worktree ที่สะอาดโดยคง branch ไว้โดยไม่ก๊อปปี้ซอร์สซ้ำ",
+      "options.0.title": "ปิด Herdr space ก่อน, บล็อกเมื่อมีไฟล์แก้/untracked (มี --snapshot-wip ให้เลือก), เตือนไฟล์ unpushed/ignored, ถอด worktree, คง branch ไว้ และ archive โน้ต + สรุป git + frozen state snapshot",
+      "options.0.reason": "ปล่อยล็อกไฟล์บน Windows ก่อนรัน git worktree remove, เลี่ยง pointer .git พัง, คง branch ไว้ใน repo ต้นทาง และได้โฟลเดอร์ archive ที่เบาและอ่านจบในตัว",
+      "options.0.pros": "ปล่อยล็อกไฟล์บน Windows ก่อนรัน git worktree remove, ไม่มี pointer .git พัง, เก็บ branch และ SHA ไว้อย่างปลอดภัยใน repo ต้นทาง, โฟลเดอร์ archive เบา",
+      "options.0.cons": "โฟลเดอร์ archive เก็บโน้ต, สรุป git และ frozen state แทนการก๊อปปี้ไฟล์โค้ดทั้ง repo",
+      "options.0.cost": "ต่ำ",
+      "options.0.risk": "ต่ำ",
+      "options.1.title": "ถอด worktree แล้วบันทึก snapshot ไฟล์ (ตัด .git ออก) ไว้ในโฟลเดอร์ archive",
+      "options.1.reason": "ก๊อปปี้ซอร์สโค้ดทั้ง repo ลงดิสก์โดยไม่จำเป็น ทั้งที่ git branch เก็บประวัติ commit ครบอยู่แล้ว",
+      "options.1.pros": "เปิดดูไฟล์โค้ดชุดสุดท้ายในโฟลเดอร์ archive ได้โดยตรง",
+      "options.1.cons": "กินพื้นที่ดิสก์ซ้ำซ้อนและช้ากับ repo ขนาดใหญ่",
+      "options.1.cost": "กลาง",
+      "options.1.risk": "ต่ำ",
+      "options.2.title": "ห้าม archive จนกว่าทุก branch จะ merge/push แล้ว จากนั้นถอดและเก็บเฉพาะ state",
+      "options.2.reason": "เข้มงวดเกินไปสำหรับงานทดลองหรืองานที่พักถาวร การเตือนแบบไม่บล็อกในตัวเลือก A ปลอดภัยและยืดหยุ่นกว่า",
+      "options.2.pros": "ป้องกันการลืม branch ที่ยังไม่ merge ได้เข้มงวดที่สุด",
+      "options.2.cons": "ไม่สามารถ archive งานทดลองหรืองานที่พักถาวรได้หากไม่ใช้ตัวเลือกบังคับ",
+      "options.2.cost": "ต่ำ",
+      "options.2.risk": "กลาง"
+    }
+  },
+  "D7": {
+    "source_hash": "778e7a204b61",
+    "text": {
+      "title": "Runtime ที่ใช้เขียน devbench CLI",
+      "choice_reason": "native Rust binary เดียวสอดคล้องกับ herdr-core และ herdr-app ไม่มี runtime dependency เปิดเร็วต่ำกว่า 5ms จัดการ argv subprocess และ file lock บน Windows ได้มั่นคง พร้อม cargo test ในตัว",
+      "options.0.title": "Rust single native binary (devbench / devbench.exe)",
+      "options.0.reason": "ไม่มี runtime dependency เปิดเร็ว จัดการพาธ/argv/file lock บน Windows ได้แข็งแรง มี serde_json และ cargo test และแจกจ่ายผ่าน GitHub Releases คู่กับ plugin manifest",
+      "options.0.pros": "ไม่มี runtime dep, แนวเดียวกับ herdr-core/herdr-app, file lock และ argv บน Windows แข็งแรง, เปิดเร็ว <5ms",
+      "options.0.cons": "ต้องมี rustup เพื่อคอมไพล์เอง หรือแจกจ่าย prebuilt binary ผ่าน GitHub Releases สำหรับผู้ใช้ marketplace",
+      "options.0.cost": "กลาง",
+      "options.0.risk": "ต่ำ",
+      "options.1.title": "Python 3.9+ stdlib CLI",
+      "options.1.reason": "ผู้ใช้เลือก native Rust binary มากกว่า runtime สคริปต์ Python",
+      "options.1.pros": "ไม่ต้องคอมไพล์ และเหมือน generate-artifact",
+      "options.1.cons": "ต้องมี py -3 / python3 บน PATH และเปิดช้ากว่า binary",
+      "options.1.cost": "ต่ำ",
+      "options.1.risk": "ต่ำ",
+      "options.2.title": "Node.js (.mjs) หรือ Bash shell script",
+      "options.2.reason": "บน Windows คำสั่ง bash ชี้ไป WSL (เรียก pipe ของ Windows herdr-core ไม่สะดวก) และไม่มี JSON/lock ในตัว ส่วน Node เพิ่ม runtime dependency",
+      "options.2.pros": "ไม่ต้องคอมไพล์",
+      "options.2.cons": "WSL bash เรียก Windows Herdr pipe ไม่ได้ และการจัดการ JSON/lock ใน shell เปราะบาง",
+      "options.2.cost": "ต่ำ",
+      "options.2.risk": "สูง"
+    }
+  },
+  "D8": {
+    "source_hash": "f2f6da656dc3",
+    "text": {
+      "title": "สัญญาอายุการทำงานและความพร้อมของ Herdr ตอนเปิด session",
+      "choice_reason": "ขั้นตอนคู่ space.new + hc run --bg --outlive-parent รับประกันว่า Owner และ domain worker อยู่รอดหลัง Dispatcher จบ ปรากฏใน 1:1 Herdr workspace และตรวจสอบ first_message.sent",
+      "options.0.title": "space.new + hc run --bg --outlive-parent พร้อม label herdr.space=<id>, ชื่อขึ้นต้น db-<slug>-<role> และตรวจสอบ first_message.sent",
+      "options.0.reason": "ป้องกันไม่ให้ child terminal ตายตาม Dispatcher ผูกการแสดงผลกับ 1:1 workspace เลี่ยงชื่อชนกันใน hc และไม่ส่งข้อความซ้ำมั่วเมื่อติด trust dialog",
+      "options.0.pros": "Owner และ worker อยู่รอดเมื่อ Dispatcher จบ (--outlive-parent) แสดงใน 1:1 Herdr space ชัดเจน ไม่ชนชื่อ global ใน hc และไม่ส่งข้อความซ้ำมั่วเมื่อติด trust prompt",
+      "options.0.cons": "ต้องเรียก 2 ขั้นตอนตอนเปิด (herdr-app space.new แล้วตามด้วย hc run)",
+      "options.0.cost": "ต่ำ",
+      "options.0.risk": "ต่ำ",
+      "options.1.title": "ใช้ herdr-app do space.new / tab.new --argv --task อย่างเดียว",
+      "options.1.reason": "ควบคุมอายุโปรเซส --outlive-parent, ชื่อ hc terminal และการตรวจสอบ first_message.sent ได้น้อยกว่า",
+      "options.1.pros": "เรียก herdr-app ครั้งเดียวต่อการเปิด",
+      "options.1.cons": "ควบคุม --outlive-parent, ชื่อ hc terminal และการตรวจสอบ first_message.sent ได้น้อยกว่า",
+      "options.1.cost": "ต่ำ",
+      "options.1.risk": "กลาง"
+    }
+  },
+  "D9": {
+    "source_hash": "f3ff27ea8a90",
+    "text": {
+      "title": "ตำแหน่งเก็บ work state, แหล่งความจริง, การล็อก และการกู้คืนเมื่อขัดข้อง",
+      "choice_reason": "การเก็บไฟล์ state แยกตามงานในโฟลเดอร์กลาง (~/.devbench/state/works/<slug>.json) ทำให้ Dispatcher ดูทุกงานที่กำลังทำและที่ archive แล้วได้ทันทีโดยไม่ต้องสแกนโฟลเดอร์ ไม่แย่ง lock ข้ามงาน อยู่นอก git worktree โดยสมบูรณ์ และคัดลอก frozen snapshot ลงโฟลเดอร์ archive เมื่อจบงาน",
+      "options.0.title": "โฟลเดอร์ state กลาง (~/.devbench/state/works/<slug>.json) พร้อม per-work lock, atomic tmp+rename, live Herdr reconciliation, phase checkpoint และ frozen archive snapshot",
+      "options.0.reason": "ให้ Dispatcher มีดัชนีกลางของทุกงาน แยก lock ต่อ 1 งาน อยู่นอก git worktree และคัดลอก frozen snapshot ลง <archive-root>/<slug>/ ตอน archive",
+      "options.0.pros": "Dispatcher ค้นหาได้ทันทีจากจุดเดียว, ไม่แย่ง lock ข้ามงาน, อยู่นอก git repo, กู้คืนจาก phase checkpoint ได้ และโฟลเดอร์ archive มี snapshot ครบในตัว",
+      "options.0.cons": "state กลางอยู่นอกโฟลเดอร์งาน (แก้ด้วยการคัดลอก frozen snapshot ตอน archive)",
+      "options.0.cost": "ต่ำ",
+      "options.0.risk": "ต่ำ",
+      "options.1.title": "เก็บ state แยกในแต่ละโฟลเดอร์งาน (<work>/.devbench/state.json) เท่านั้น",
+      "options.1.reason": "บังคับให้ Dispatcher ต้องไล่สแกน work_root และ archive_root ทุกครั้งที่ถามสถานะและเสี่ยงหลุดการติดตามเมื่อย้ายโฟลเดอร์",
+      "options.1.pros": "state ย้ายไปพร้อมโฟลเดอร์งานโดยตรง",
+      "options.1.cons": "ไม่มีดัชนีกลางให้ Dispatcher ต้องสแกนโฟลเดอร์ซ้ำทั้ง active และ archive",
+      "options.1.cost": "ต่ำ",
+      "options.1.risk": "กลาง",
+      "options.2.title": "ไฟล์ state.json ก้อนเดียวโดยไม่มี lock หรือ phase checkpoint",
+      "options.2.reason": "การอัปเดตพร้อมกันจากหลายงานชนกันบนไฟล์เดียว และหากขัดข้องกลาง archive บน Windows อาจทำให้ state พัง",
+      "options.2.pros": "ไฟล์เดียวรวมทุกอย่าง",
+      "options.2.cons": "แย่งกันเขียนทั้งระบบและเสี่ยงไฟล์เสียหายเมื่อขัดข้อง",
+      "options.2.cost": "ต่ำ",
+      "options.2.risk": "สูง"
+    }
+  },
+  "C1": {
+    "source_hash": "4db53fc52c35",
+    "text": {
+      "label": "รูปแบบใหม่",
+      "title": "Work (โฟลเดอร์กลาง + Herdr workspace แบบ 1:1)",
+      "plain": "ทุกงานมีโฟลเดอร์เฉพาะของตัวเองที่รวม repo worktree และโน้ตทั้งหมดไว้ด้วยกัน คู่กับ Herdr workspace เฉพาะงานแบบ 1 ต่อ 1 และมีบันทึกกลางให้ Dispatcher เห็นทันที",
+      "before": "branch, เทอร์มินัล และโน้ตของงานเดียวกระจัดกระจายอยู่ตามโฟลเดอร์ repo ต่างๆ และปนกันใน Herdr tab เดียว",
+      "now": "1 slug แทน 1 โฟลเดอร์งาน (<work-root>/<slug>/), 1 ชุด branch ข้าม repo เป้าหมาย, 1 Herdr workspace เฉพาะ และ 1 บันทึกกลางใน ~/.devbench/state/works/<slug>.json",
+      "why": "สามารถตรวจสอบ พักงาน resume หรือ archive งานหลาย repo ทั้งก้อนได้ในคราวเดียวโดยไม่เสี่ยงกระทบงานอื่นที่กำลังรันอยู่",
+      "analogy": "โต๊ะทำงานเฉพาะโปรเจกต์: แบบแปลนทุกแผ่นของงานนี้อยู่บนโต๊ะเดียว จดคุมไว้บนกระดานกลางใบเดียว และเมื่อจบงานก็เก็บลงกล่องทั้งโต๊ะในครั้งเดียว",
+      "summary": "Work คือหน่วยวงจรชีวิตระดับบนสุด (creating -> active -> archiving -> archived) ภายใน <work-root>/<slug>/ ประกอบด้วยโน้ตและ git worktree ของแต่ละ repo ขณะที่ live state เก็บไว้ที่ส่วนกลาง ~/.devbench/state/works/<slug>.json เพื่อให้ Dispatcher เห็นทุกงานทันที ตอน archive จะปิด Herdr workspace แบบ 1:1 ก่อนเพื่อปล่อยไฟล์ล็อก ถอด worktree ที่สะอาดโดยคง git branch ไว้ใน repo ต้นทาง คัดลอก frozen state snapshot ลงในโฟลเดอร์ แล้วจึงย้ายไปที่ archive root",
+      "terms": "work slug, central work folder, 1:1 Herdr workspace, work lifecycle"
+    }
+  },
+  "C2": {
+    "source_hash": "25aebb427071",
+    "text": {
+      "label": "รูปแบบใหม่",
+      "title": "ลำดับชั้นเอเจนต์ 4 ระดับ และ Session ID 3 ชนิด",
+      "plain": "งานไหลลงตามลำดับ Dispatcher -> Owner -> (domain) worker -> sub-agent แยกอิสระ โดยทุก persistent session จะบันทึก ID แยก 3 ชนิดไว้ไม่ให้หลงทาง",
+      "before": "ทุกเทอร์มินัลหน้าตาเหมือนกันหมด ผู้ใช้ต้องจำเองว่า pane ไหนทำบทบาทอะไร และทำ native AI session ID หายทุกครั้งที่ปิดเทอร์มินัล",
+      "now": "devbench ดูแล Owner และ domain-worker session แบบคงอยู่ (แยก sub-agent ชั่วคราวไว้ใน delegation layer) และบันทึก hc terminal ID, Herdr pane ID และ native AI session ID พร้อม cwd ของแต่ละ session",
+      "why": "ID แต่ละชนิดมีอายุต่างกัน เมื่อ Herdr pane หรือ hc terminal หายหลังรีบูต ตัว native AI session ID และ cwd ที่บันทึกไว้จะช่วยให้ devbench resume บทสนทนาเดิมได้ตรงจุด",
+      "analogy": "การจองโรงแรม: เลขห้อง (Herdr pane), คีย์การ์ด (hc terminal) และประวัติแขก (native AI session ID) แยกเก็บกัน ทำให้ทำคีย์การ์ดหายก็ไม่เสียข้อมูลแขก",
+      "summary": "Dispatcher เป็นคนสร้างงานและเปิด Owner ใน pane หลัก ส่วน Owner ประสานงานกับ domain worker (เช่น backend, frontend, docs) ใน tab หรือ split ภายใน Herdr workspace 1:1 เดียวกัน ขณะที่ ephemeral sub-agent อยู่นอก devbench เนื่องจากคำสั่ง resume ของ Claude และ Codex ผูกกับ cwd ไฟล์ state.json จึงเก็บ cwd ของแต่ละ session คู่กับสถานะการเก็บ ID (auto, manual, pending, unavailable)",
+      "terms": "Dispatcher, Owner, domain worker, sub-agent, hc terminal ID, Herdr pane ID, native AI session ID"
+    }
+  },
+  "C3": {
+    "source_hash": "5371e795b8f1",
+    "text": {
+      "label": "ขอบเขตเดิม",
+      "title": "การแบ่งหน้าที่ของ Herdr: herdr-core เลี้ยงโปรเซส, herdr-app แสดงผล",
+      "plain": "herdr-core (hc) คอยเลี้ยงโปรเซสเอเจนต์ให้ทำงานต่อเบื้องหลัง ส่วน herdr-app คุมเฉพาะสิ่งที่ผู้ใช้มองเห็นใน space, tab และ pane",
+      "before": "โดยค่าเริ่มต้น hc จะฆ่า child terminal ทุกตัวทันทีที่ parent (แท็บ Dispatcher) ปิดหรือรีสตาร์ต ทำให้ Owner ที่กำลังทำงานอยู่ดับไปด้วย ส่วน hc terminal ที่ไม่มี label จะซ่อนอยู่ไม่โผล่ในหน้าต่าง Herdr",
+      "now": "devbench สร้าง workspace ที่มองเห็นด้วย herdr-app space.new แล้วเปิดเอเจนต์ด้วย hc run --bg --outlive-parent ติด label herdr.space=<id> ซึ่งแปลว่าอยู่รอดเมื่อ Dispatcher ปิด (ไม่ใช่ zombie process: การปิด pane/space หรือ archive ยังคงฆ่าโปรเซสและคืน RAM ตามปกติ) พร้อมเช็ก first_message.sent ก่อนรายงานว่าพร้อม",
+      "why": "การแยกอายุของ Owner ออกจากแท็บ Dispatcher ป้องกันไม่ให้งานที่ทำอยู่ดับตอนรีสตาร์ตหรือปิด Dispatcher ขณะที่การปิด pane และ archive ยังคงคืนหน่วยความจำอย่างสะอาด และเช็ก first_message.sent เพื่อไม่ให้ส่งข้อความซ้ำมั่วเมื่อติดหน้าต่างยืนยันสิทธิ์",
+      "analogy": "เวทีโรงละคร (herdr-app) กับเครื่องจักรหลังเวที (herdr-core): การปิดม่านไม่ได้ดับเครื่องยนต์ที่ทำงานอยู่หลังเวที แต่การปิด pane ของห้องนั้นหรือ archive จะดับเครื่องยนต์ให้เรียบร้อย",
+      "summary": "ใน herdr-core คำว่า 'parent' หมายถึงเทอร์มินัล Dispatcher ที่เป็นคนเปิด session การส่ง --outlive-parent มีไว้เพียงป้องกันไม่ให้ Owner/worker ที่กำลังทำงานอยู่ถูกฆ่าเมื่อคุณปิดหรือรีสตาร์ต Dispatcher เท่านั้น ไม่ได้ทำให้เกิด zombie process เพราะการปิด pane/space ใน Herdr หรือการรัน devbench archive จะ kill และลบ terminal เหล่านั้นออกเพื่อคืน RAM และปล่อยล็อกไฟล์บน Windows อย่างชัดเจน การติด label herdr.space=<id> ทำให้แสดงผลใน 1:1 workspace และ --no-daemon ทำให้คำสั่งของ Codex ทำงานอยู่ภายใน hc",
+      "terms": "herdr-core (hc), herdr-app, --outlive-parent, herdr.space label, first_message.sent"
+    }
+  },
+  "C4": {
+    "source_hash": "ebed6093f49a",
+    "text": {
+      "label": "สถาปัตยกรรมใหม่",
+      "title": "3 แหล่งเก็บข้อมูลที่แยกขาด และการ Reconcile กับความจริงสด",
+      "plain": "โค้ดปลั๊กอิน, external user config และ central work state ของ Dispatcher ถูกแยกเก็บเป็น 3 ส่วนชัดเจน โดยยึด Herdr เป็นความจริงสดเสมอ",
+      "before": "พาธส่วนตัว สคริปต์ประสานงาน และโน้ตต่างๆ ปนกัน ทำให้การอัปเดตปลั๊กอินเสี่ยงทับค่าตั้งค่า และไฟล์ state เก่าทำให้ดูสถานะผิดพลาด",
+      "now": "โค้ดปลั๊กอินที่เป็นกลาง + config.example.json อยู่ใน marketplace repo; user config อยู่ที่ ~/.devbench/config.json; work state อยู่ที่ส่วนกลาง ~/.devbench/state/works/<slug>.json เพื่อให้ Dispatcher อ่านทุกงานได้ทันทีและ reconcile กับ hc/herdr-app สด",
+      "why": "อัปเดตปลั๊กอินได้โดยไม่ทับพาธหรือ alias ส่วนตัว push โค้ดได้โดยไม่หลุดข้อมูลเครื่อง Dispatcher เห็นทุกงานในจุดเดียวโดยไม่ต้องสแกนโฟลเดอร์ และกู้คืนงานที่สะดุดกลางทางได้จาก atomic phase checkpoint",
+      "analogy": "ตำราอาหาร (โค้ดปลั๊กอิน), รายการของในครัวคุณ (user config) และกระดานออเดอร์กลางในครัว (work state) — อัปเดตตำราใหม่ไม่ทำให้รายการของในครัวหรือออเดอร์ที่เปิดอยู่หาย",
+      "summary": "โค้ดปลั๊กอิน (Rust binary + manifest) เป็นแบบ read-only ใน marketplace cache; user config มี schema_version และตรวจเทียบกับ config.example.json โดยไม่เขียนทับอัตโนมัติ; central work state อยู่ที่ ~/.devbench/state/works/<slug>.json นอกทุก git worktree ใช้ per-work lock และ atomic rename บันทึก phase เพื่อกู้คืนเมื่อขัดข้อง และวาง frozen snapshot ในโฟลเดอร์ archive เมื่อจบงาน",
+      "terms": "plugin code, config template, user config, work state, live reconciliation, phase checkpoint"
+    }
+  }
+}

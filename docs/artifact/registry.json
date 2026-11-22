@@ -1,0 +1,1020 @@
+{
+  "components": [
+    {
+      "id": "CMP-SYS",
+      "name": "devbench",
+      "kind": "system",
+      "c4_level": "L1",
+      "status": "new",
+      "change": {
+        "what": "Standalone multi-agent plugin and marketplace repository implementing the Dispatcher -> Owner -> (domain) worker hierarchy with central per-task work folders, git worktrees, Herdr sessions, centralized work/AI session state, and one-step archiving.",
+        "why": "Replaces manual Herdr pane setup, ad-hoc git worktrees, and lost AI session IDs with one reproducible, cross-agent workflow.",
+        "ucs": [
+          "UC-01",
+          "UC-02",
+          "UC-03",
+          "UC-04",
+          "UC-05",
+          "UC-06",
+          "UC-07"
+        ],
+        "decisions": [
+          "D1",
+          "D2",
+          "D3",
+          "D4",
+          "D5",
+          "D6",
+          "D7",
+          "D8",
+          "D9"
+        ],
+        "waive": {
+          "files": "System-level view; the file changes are listed on its L2 containers."
+        },
+        "diagrams": {
+          "before": "diagrams/comp-cmp-sys-before.svg",
+          "after": "diagrams/comp-cmp-sys-after.svg"
+        }
+      }
+    },
+    {
+      "id": "CMP-HERDR",
+      "name": "Herdr",
+      "c4_level": "L1",
+      "status": "unchanged"
+    },
+    {
+      "id": "CMP-GIT",
+      "name": "Git repos",
+      "c4_level": "L1",
+      "status": "unchanged"
+    },
+    {
+      "id": "CMP-AGENTS",
+      "name": "Agent CLIs",
+      "c4_level": "L1",
+      "status": "unchanged"
+    },
+    {
+      "id": "CMP-PLUGIN",
+      "name": "devbench plugin",
+      "c4_level": "L2",
+      "status": "new",
+      "change": {
+        "what": "Multi-agent plugin package (.antigravity-plugin, .claude-plugin + marketplace, Codex skill) and single native Rust CLI binary (devbench) orchestrating config checks, Herdr space/terminal launches, per-harness AI session ID adapters, and live status reconciliation.",
+        "why": "Packages the workflow cleanly into a versioned marketplace repository with zero runtime dependencies, <5ms startup, and safe Windows argv subprocess handling.",
+        "ucs": [
+          "UC-01",
+          "UC-02",
+          "UC-03",
+          "UC-04",
+          "UC-05",
+          "UC-07"
+        ],
+        "decisions": [
+          "D2",
+          "D3",
+          "D4",
+          "D5",
+          "D7",
+          "D8"
+        ],
+        "files": [
+          {
+            "path": ".antigravity-plugin/plugin.json",
+            "change": "added"
+          },
+          {
+            "path": ".claude-plugin/plugin.json",
+            "change": "added"
+          },
+          {
+            "path": ".claude-plugin/marketplace.json",
+            "change": "added"
+          },
+          {
+            "path": "skills/devbench/SKILL.md",
+            "change": "added"
+          },
+          {
+            "path": "skills/devbench-owner/SKILL.md",
+            "change": "added"
+          },
+          {
+            "path": "Cargo.toml",
+            "change": "added"
+          },
+          {
+            "path": "src/main.rs",
+            "change": "added"
+          },
+          {
+            "path": "src/cli.rs",
+            "change": "added"
+          },
+          {
+            "path": "src/herdr.rs",
+            "change": "added"
+          },
+          {
+            "path": "src/adapters/mod.rs",
+            "change": "added"
+          },
+          {
+            "path": "src/adapters/claude.rs",
+            "change": "added"
+          },
+          {
+            "path": "src/adapters/codex.rs",
+            "change": "added"
+          },
+          {
+            "path": "src/adapters/agy.rs",
+            "change": "added"
+          },
+          {
+            "path": "src/adapters/generic.rs",
+            "change": "added"
+          },
+          {
+            "path": "tests/cli_tests.rs",
+            "change": "added"
+          }
+        ],
+        "diagrams": {
+          "before": "diagrams/comp-cmp-plugin-before.svg",
+          "after": "diagrams/comp-cmp-plugin-after.svg",
+          "flowchart": [
+            {
+              "title": "Session resume & ID recheck",
+              "diagram": "diagrams/comp-cmp-plugin-flow-resume.svg"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "CMP-CONFIG",
+      "name": "User config",
+      "kind": "store",
+      "c4_level": "L2",
+      "status": "new",
+      "change": {
+        "what": "External-first user config ($DEVBENCH_CONFIG -> ~/.devbench/config.json, optional gitignored local fallback in repo dev mode) seeded from committed templates/config.example.json storing default work root, archive root, repo aliases, and default agent CLI commands.",
+        "why": "Separates personal machine paths and CLI defaults from generic plugin code, shares one config across agy/claude/codex, and survives versioned marketplace cache updates.",
+        "ucs": [
+          "UC-01",
+          "UC-02",
+          "UC-03",
+          "UC-05",
+          "UC-07"
+        ],
+        "decisions": [
+          "D3",
+          "D4"
+        ],
+        "data": [
+          {
+            "object": "config.json",
+            "change": "new external JSON file (schema_version = 1)",
+            "migration": "devbench init / config check"
+          },
+          {
+            "object": "config.repos.*",
+            "change": "new repo alias map -> {path, base_ref}",
+            "migration": "seeded from config.example.json"
+          },
+          {
+            "object": "config.agents.*",
+            "change": "new harness argv map -> {argv, resume_argv, capture}",
+            "migration": "seeded from config.example.json"
+          }
+        ],
+        "files": [
+          {
+            "path": "templates/config.example.json",
+            "change": "added"
+          },
+          {
+            "path": "src/config.rs",
+            "change": "added"
+          },
+          {
+            "path": ".gitignore",
+            "change": "added"
+          }
+        ],
+        "diagrams": {
+          "before": "diagrams/comp-cmp-config-before.svg",
+          "after": "diagrams/comp-cmp-config-after.svg",
+          "extra": "diagrams/comp-cmp-config-extra.svg"
+        },
+        "data_dictionary": {
+          "tables": [
+            {
+              "table": "config.json (root)",
+              "status": "new",
+              "columns": [
+                {
+                  "name": "schema_version",
+                  "change": "new",
+                  "type": "integer",
+                  "nullable": false,
+                  "default": "1",
+                  "meaning": "Config schema version checked by devbench config check on plugin updates.",
+                  "samples": [
+                    "1"
+                  ]
+                },
+                {
+                  "name": "work_root",
+                  "change": "new",
+                  "type": "path string",
+                  "nullable": false,
+                  "default": "~/work",
+                  "meaning": "Parent folder where each active task gets its own <work_root>/<slug>/ directory.",
+                  "samples": [
+                    "~/work",
+                    "D:/work"
+                  ]
+                },
+                {
+                  "name": "archive_root",
+                  "change": "new",
+                  "type": "path string",
+                  "nullable": false,
+                  "default": "~/work-archive",
+                  "meaning": "Destination folder where completed work folders are moved after worktrees detach.",
+                  "samples": [
+                    "~/work-archive",
+                    "D:/work-archive"
+                  ]
+                },
+                {
+                  "name": "branch_prefix",
+                  "change": "new",
+                  "type": "string",
+                  "nullable": false,
+                  "default": "devbench/",
+                  "meaning": "Prefix applied to auto-created git task branches (e.g. devbench/<slug>).",
+                  "samples": [
+                    "devbench/",
+                    "work/"
+                  ]
+                },
+                {
+                  "name": "default_agent",
+                  "change": "new",
+                  "type": "string",
+                  "nullable": false,
+                  "default": "claude",
+                  "meaning": "Key into config.agents used when a spawn command does not specify a harness.",
+                  "samples": [
+                    "claude",
+                    "codex",
+                    "agy"
+                  ]
+                }
+              ],
+              "sample_rows": {
+                "columns": [
+                  "schema_version",
+                  "work_root",
+                  "archive_root",
+                  "branch_prefix",
+                  "default_agent"
+                ],
+                "rows": [
+                  [
+                    "1",
+                    "~/work",
+                    "~/work-archive",
+                    "devbench/",
+                    "claude"
+                  ]
+                ]
+              }
+            },
+            {
+              "table": "config.repos (map)",
+              "status": "new",
+              "columns": [
+                {
+                  "name": "alias",
+                  "change": "new",
+                  "type": "string (key)",
+                  "nullable": false,
+                  "default": "-",
+                  "meaning": "Short repository name passed to devbench new --repos.",
+                  "samples": [
+                    "api",
+                    "web",
+                    "shared"
+                  ]
+                },
+                {
+                  "name": "path",
+                  "change": "new",
+                  "type": "path string",
+                  "nullable": false,
+                  "default": "-",
+                  "meaning": "Absolute or tilde path to the local source Git repository.",
+                  "samples": [
+                    "~/projects/api",
+                    "~/projects/web"
+                  ]
+                },
+                {
+                  "name": "base_ref",
+                  "change": "new",
+                  "type": "git ref",
+                  "nullable": false,
+                  "default": "origin/main",
+                  "meaning": "Base branch or ref used when creating new task worktrees.",
+                  "samples": [
+                    "origin/main",
+                    "main"
+                  ]
+                }
+              ],
+              "sample_rows": {
+                "columns": [
+                  "alias",
+                  "path",
+                  "base_ref"
+                ],
+                "rows": [
+                  [
+                    "api",
+                    "~/projects/api",
+                    "origin/main"
+                  ],
+                  [
+                    "web",
+                    "~/projects/web",
+                    "origin/main"
+                  ]
+                ]
+              }
+            },
+            {
+              "table": "config.agents (map)",
+              "status": "new",
+              "columns": [
+                {
+                  "name": "harness",
+                  "change": "new",
+                  "type": "string (key)",
+                  "nullable": false,
+                  "default": "-",
+                  "meaning": "Agent CLI identifier selectable on spawn.",
+                  "samples": [
+                    "claude",
+                    "codex",
+                    "agy"
+                  ]
+                },
+                {
+                  "name": "argv",
+                  "change": "new",
+                  "type": "string[]",
+                  "nullable": false,
+                  "default": "-",
+                  "meaning": "Explicit command array passed directly to hc run (never shell-split; Codex includes --no-daemon).",
+                  "samples": [
+                    "[\"claude\"]",
+                    "[\"codex\", \"--no-daemon\"]",
+                    "[\"agy\"]"
+                  ]
+                },
+                {
+                  "name": "resume_argv",
+                  "change": "new",
+                  "type": "string[]",
+                  "nullable": true,
+                  "default": "NULL",
+                  "meaning": "Argv template with {session_id} placeholder used when resuming a stopped session.",
+                  "samples": [
+                    "[\"claude\", \"--resume\", \"{session_id}\"]",
+                    "[\"codex\", \"resume\", \"{session_id}\"]"
+                  ]
+                },
+                {
+                  "name": "capture",
+                  "change": "new",
+                  "type": "enum capture_mode",
+                  "nullable": false,
+                  "default": "manual",
+                  "meaning": "Strategy the adapter uses to obtain a native AI session ID.",
+                  "values": [
+                    {
+                      "value": "preassign",
+                      "meaning": "devbench generates a UUID and passes --session-id at launch (Claude)."
+                    },
+                    {
+                      "value": "scan",
+                      "meaning": "devbench scans the CLI rollout log matching cwd after launch (Codex)."
+                    },
+                    {
+                      "value": "manual",
+                      "meaning": "ID is bound later by user or Dispatcher on resume (agy / generic)."
+                    }
+                  ],
+                  "samples": [
+                    "preassign",
+                    "scan",
+                    "manual"
+                  ]
+                }
+              ],
+              "sample_rows": {
+                "columns": [
+                  "harness",
+                  "argv",
+                  "resume_argv",
+                  "capture"
+                ],
+                "rows": [
+                  [
+                    "claude",
+                    "[\"claude\"]",
+                    "[\"claude\", \"--resume\", \"{session_id}\"]",
+                    "preassign"
+                  ],
+                  [
+                    "codex",
+                    "[\"codex\", \"--no-daemon\"]",
+                    "[\"codex\", \"resume\", \"{session_id}\"]",
+                    "scan"
+                  ],
+                  [
+                    "agy",
+                    "[\"agy\"]",
+                    "NULL",
+                    "manual"
+                  ]
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "CMP-WORKTREE",
+      "name": "Worktree manager",
+      "c4_level": "L2",
+      "status": "new",
+      "change": {
+        "what": "Sanitizes work slugs for Windows/Unix safety, preflights all target repos, creates central per-task work folders with git worktrees and task branches, guards dirty/untracked/ignored state, and cleanly detaches and archives completed folders.",
+        "why": "Isolates parallel multi-repo work in one folder per task and enables safe one-step archiving without breaking Git metadata, hitting Windows file locks, or losing uncommitted edits.",
+        "ucs": [
+          "UC-02",
+          "UC-05",
+          "UC-06"
+        ],
+        "decisions": [
+          "D1",
+          "D6",
+          "D7",
+          "D9"
+        ],
+        "files": [
+          {
+            "path": "src/worktree.rs",
+            "change": "added"
+          },
+          {
+            "path": "src/paths.rs",
+            "change": "added"
+          },
+          {
+            "path": "src/archive.rs",
+            "change": "added"
+          },
+          {
+            "path": "tests/worktree_tests.rs",
+            "change": "added"
+          }
+        ],
+        "diagrams": {
+          "before": "diagrams/comp-cmp-worktree-before.svg",
+          "after": "diagrams/comp-cmp-worktree-after.svg",
+          "flowchart": [
+            {
+              "title": "Archive safety & lock-release flow",
+              "diagram": "diagrams/comp-cmp-worktree-flow-archive.svg"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "CMP-STATE",
+      "name": "Work state",
+      "kind": "store",
+      "c4_level": "L2",
+      "status": "new",
+      "change": {
+        "what": "Centralized per-work state store (~/.devbench/state/works/<slug>.json) with per-work file locks, atomic tmp+rename writes, and phase checkpoints tracking work status, 1:1 Herdr workspace ID, target repos, worktree paths/branches, Herdr pane/hc IDs, and native AI session IDs + cwd; copies a frozen snapshot into the archive folder on completion.",
+        "why": "Gives the Dispatcher one instant central index of every active and archived work without folder scanning, avoids cross-work lock contention, stays outside every git worktree, and survives crashes cleanly.",
+        "ucs": [
+          "UC-02",
+          "UC-03",
+          "UC-04",
+          "UC-05"
+        ],
+        "decisions": [
+          "D2",
+          "D5",
+          "D6",
+          "D7",
+          "D9"
+        ],
+        "data": [
+          {
+            "object": "~/.devbench/state/works/<slug>.json",
+            "change": "new central per-work state JSON (schema_version = 1)",
+            "migration": "created by devbench new"
+          },
+          {
+            "object": "~/.devbench/state/works/<slug>.lock",
+            "change": "new per-work advisory file lock for atomic tmp+rename",
+            "migration": "managed by src/lock.rs"
+          },
+          {
+            "object": "<archive-root>/<slug>/state.snapshot.json",
+            "change": "new frozen read-only copy written during archive",
+            "migration": "written by devbench archive"
+          }
+        ],
+        "files": [
+          {
+            "path": "src/state.rs",
+            "change": "added"
+          },
+          {
+            "path": "src/lock.rs",
+            "change": "added"
+          },
+          {
+            "path": "tests/state_tests.rs",
+            "change": "added"
+          }
+        ],
+        "diagrams": {
+          "before": "diagrams/comp-cmp-state-before.svg",
+          "after": "diagrams/comp-cmp-state-after.svg",
+          "extra": "diagrams/comp-cmp-state-extra.svg"
+        },
+        "data_dictionary": {
+          "tables": [
+            {
+              "table": "work_state (root)",
+              "status": "new",
+              "columns": [
+                {
+                  "name": "slug",
+                  "change": "new",
+                  "type": "string (PK)",
+                  "nullable": false,
+                  "default": "-",
+                  "meaning": "Sanitized unique identifier naming the work folder, Herdr space, and central state file.",
+                  "samples": [
+                    "fix-auth-token",
+                    "billing-export"
+                  ]
+                },
+                {
+                  "name": "status",
+                  "change": "new",
+                  "type": "enum work_status",
+                  "nullable": false,
+                  "default": "creating",
+                  "meaning": "Current lifecycle stage of the work.",
+                  "values": [
+                    {
+                      "value": "creating",
+                      "meaning": "Worktrees or initial setup in progress."
+                    },
+                    {
+                      "value": "active",
+                      "meaning": "Workspace ready and available for Owner/worker sessions."
+                    },
+                    {
+                      "value": "archiving",
+                      "meaning": "Archive sequence running; check archive_phase for resume point."
+                    },
+                    {
+                      "value": "archived",
+                      "meaning": "Herdr closed, worktrees detached, folder moved to archive_root."
+                    },
+                    {
+                      "value": "failed",
+                      "meaning": "Setup or launch aborted; requires inspection or cleanup."
+                    }
+                  ],
+                  "samples": [
+                    "active",
+                    "archiving",
+                    "archived"
+                  ]
+                },
+                {
+                  "name": "archive_phase",
+                  "change": "new",
+                  "type": "enum archive_phase",
+                  "nullable": true,
+                  "default": "NULL",
+                  "meaning": "Last completed archive checkpoint so interrupted runs resume idempotently.",
+                  "values": [
+                    {
+                      "value": "herdr_closed",
+                      "meaning": "1:1 Herdr space closed and recorded hc terminals killed."
+                    },
+                    {
+                      "value": "worktrees_detached",
+                      "meaning": "All git worktrees removed and pruned."
+                    },
+                    {
+                      "value": "snapshot_written",
+                      "meaning": "Frozen state.snapshot.json and git summary written."
+                    },
+                    {
+                      "value": "moved",
+                      "meaning": "Folder moved to archive_root."
+                    }
+                  ],
+                  "samples": [
+                    "NULL",
+                    "herdr_closed",
+                    "moved"
+                  ]
+                },
+                {
+                  "name": "herdr_space_id",
+                  "change": "new",
+                  "type": "string",
+                  "nullable": true,
+                  "default": "NULL",
+                  "meaning": "Machine-local 1:1 Herdr workspace ID reconciled against live herdr-app ls.",
+                  "samples": [
+                    "s14",
+                    "NULL"
+                  ]
+                },
+                {
+                  "name": "work_dir",
+                  "change": "new",
+                  "type": "path string",
+                  "nullable": false,
+                  "default": "-",
+                  "meaning": "Active central folder path (<work_root>/<slug>) holding worktrees and notes.",
+                  "samples": [
+                    "~/work/fix-auth-token"
+                  ]
+                },
+                {
+                  "name": "archive_path",
+                  "change": "new",
+                  "type": "path string",
+                  "nullable": true,
+                  "default": "NULL",
+                  "meaning": "Final destination path under archive_root once archived.",
+                  "samples": [
+                    "NULL",
+                    "~/work-archive/fix-auth-token"
+                  ]
+                }
+              ],
+              "sample_rows": {
+                "columns": [
+                  "slug",
+                  "status",
+                  "archive_phase",
+                  "herdr_space_id",
+                  "work_dir"
+                ],
+                "rows": [
+                  [
+                    "fix-auth-token",
+                    "active",
+                    "NULL",
+                    "s14",
+                    "~/work/fix-auth-token"
+                  ],
+                  [
+                    "billing-export",
+                    "archived",
+                    "moved",
+                    "NULL",
+                    "~/work-archive/billing-export"
+                  ]
+                ]
+              }
+            },
+            {
+              "table": "work_repos (array)",
+              "status": "new",
+              "columns": [
+                {
+                  "name": "alias",
+                  "change": "new",
+                  "type": "string",
+                  "nullable": false,
+                  "default": "-",
+                  "meaning": "Repository alias from config.repos.",
+                  "samples": [
+                    "api",
+                    "web"
+                  ]
+                },
+                {
+                  "name": "worktree_path",
+                  "change": "new",
+                  "type": "path string",
+                  "nullable": false,
+                  "default": "-",
+                  "meaning": "Path to this repo's worktree inside the central work folder.",
+                  "samples": [
+                    "~/work/fix-auth-token/api"
+                  ]
+                },
+                {
+                  "name": "branch",
+                  "change": "new",
+                  "type": "git branch",
+                  "nullable": false,
+                  "default": "-",
+                  "meaning": "Task branch kept in the source repo even after archive detaches the worktree.",
+                  "samples": [
+                    "devbench/fix-auth-token"
+                  ]
+                },
+                {
+                  "name": "base_sha",
+                  "change": "new",
+                  "type": "git sha",
+                  "nullable": false,
+                  "default": "-",
+                  "meaning": "Commit SHA where the worktree branched off.",
+                  "samples": [
+                    "a1b2c3d"
+                  ]
+                },
+                {
+                  "name": "final_head_sha",
+                  "change": "new",
+                  "type": "git sha",
+                  "nullable": true,
+                  "default": "NULL",
+                  "meaning": "Branch tip SHA recorded right before detaching the worktree on archive.",
+                  "samples": [
+                    "NULL",
+                    "f9e8d7c"
+                  ]
+                }
+              ],
+              "sample_rows": {
+                "columns": [
+                  "alias",
+                  "branch",
+                  "base_sha",
+                  "final_head_sha"
+                ],
+                "rows": [
+                  [
+                    "api",
+                    "devbench/fix-auth-token",
+                    "a1b2c3d",
+                    "NULL"
+                  ],
+                  [
+                    "web",
+                    "devbench/billing-export",
+                    "4b5c6d7",
+                    "f9e8d7c"
+                  ]
+                ]
+              }
+            },
+            {
+              "table": "work_sessions (array)",
+              "status": "new",
+              "columns": [
+                {
+                  "name": "key",
+                  "change": "new",
+                  "type": "string",
+                  "nullable": false,
+                  "default": "-",
+                  "meaning": "Role key within the work (owner or worker-<domain>).",
+                  "samples": [
+                    "owner",
+                    "worker-backend",
+                    "worker-web"
+                  ]
+                },
+                {
+                  "name": "tier",
+                  "change": "new",
+                  "type": "enum session_tier",
+                  "nullable": false,
+                  "default": "owner",
+                  "meaning": "Persistent tier managed by devbench (ephemeral sub-agents are excluded).",
+                  "values": [
+                    {
+                      "value": "owner",
+                      "meaning": "Primary task coordinator in the workspace main pane."
+                    },
+                    {
+                      "value": "worker",
+                      "meaning": "Domain specialist in a tab or split pane inside the same workspace."
+                    }
+                  ],
+                  "samples": [
+                    "owner",
+                    "worker"
+                  ]
+                },
+                {
+                  "name": "cwd",
+                  "change": "new",
+                  "type": "path string",
+                  "nullable": false,
+                  "default": "-",
+                  "meaning": "Exact working directory used at launch, required because Claude and Codex resume are cwd-scoped.",
+                  "samples": [
+                    "~/work/fix-auth-token/api"
+                  ]
+                },
+                {
+                  "name": "hc_terminal_id",
+                  "change": "new",
+                  "type": "string",
+                  "nullable": true,
+                  "default": "NULL",
+                  "meaning": "herdr-core terminal address (e.g. t7) reconciled live via hc get.",
+                  "samples": [
+                    "t7",
+                    "t12"
+                  ]
+                },
+                {
+                  "name": "herdr_pane_id",
+                  "change": "new",
+                  "type": "string",
+                  "nullable": true,
+                  "default": "NULL",
+                  "meaning": "herdr-app visible pane ID inside the 1:1 workspace.",
+                  "samples": [
+                    "p21",
+                    "p22"
+                  ]
+                },
+                {
+                  "name": "native_session_id",
+                  "change": "new",
+                  "type": "string",
+                  "nullable": true,
+                  "default": "NULL",
+                  "meaning": "Native AI CLI conversation ID used for resume or manual recheck.",
+                  "samples": [
+                    "8f4c2b10-...",
+                    "NULL"
+                  ]
+                },
+                {
+                  "name": "capture",
+                  "change": "new",
+                  "type": "enum capture_state",
+                  "nullable": false,
+                  "default": "pending",
+                  "meaning": "How the native AI session ID was obtained.",
+                  "values": [
+                    {
+                      "value": "auto",
+                      "meaning": "Pre-assigned or scanned automatically by the harness adapter."
+                    },
+                    {
+                      "value": "manual",
+                      "meaning": "Bound explicitly by the user or Dispatcher."
+                    },
+                    {
+                      "value": "pending",
+                      "meaning": "Not captured yet; launch was not blocked."
+                    },
+                    {
+                      "value": "unavailable",
+                      "meaning": "Harness does not support native session resume."
+                    }
+                  ],
+                  "samples": [
+                    "auto",
+                    "manual",
+                    "pending"
+                  ]
+                },
+                {
+                  "name": "status",
+                  "change": "new",
+                  "type": "enum session_status",
+                  "nullable": false,
+                  "default": "launching",
+                  "meaning": "Last reconciled session state (Herdr live status always wins over cached state).",
+                  "values": [
+                    {
+                      "value": "launching",
+                      "meaning": "Spawned via hc; awaiting first_message.sent check."
+                    },
+                    {
+                      "value": "running",
+                      "meaning": "Active and working in Herdr."
+                    },
+                    {
+                      "value": "idle",
+                      "meaning": "Alive and waiting for next turn."
+                    },
+                    {
+                      "value": "blocked",
+                      "meaning": "Paused on permission or trust dialog; needs human input."
+                    },
+                    {
+                      "value": "exited",
+                      "meaning": "Process ended cleanly; resumable via native_session_id."
+                    },
+                    {
+                      "value": "lost",
+                      "meaning": "hc terminal missing after reboot or restart; resumable via native_session_id."
+                    },
+                    {
+                      "value": "archived",
+                      "meaning": "Closed as part of work archive."
+                    }
+                  ],
+                  "samples": [
+                    "running",
+                    "blocked",
+                    "lost",
+                    "archived"
+                  ]
+                }
+              ],
+              "sample_rows": {
+                "columns": [
+                  "key",
+                  "tier",
+                  "hc_terminal_id",
+                  "native_session_id",
+                  "capture",
+                  "status"
+                ],
+                "rows": [
+                  [
+                    "owner",
+                    "owner",
+                    "t7",
+                    "8f4c2b10-...",
+                    "auto",
+                    "running"
+                  ],
+                  [
+                    "worker-api",
+                    "worker",
+                    "t12",
+                    "NULL",
+                    "pending",
+                    "idle"
+                  ]
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "CMP-HERDR-APP",
+      "name": "herdr-app",
+      "c4_level": "L2",
+      "status": "unchanged"
+    },
+    {
+      "id": "CMP-HERDR-CORE",
+      "name": "herdr-core (hc)",
+      "c4_level": "L2",
+      "status": "unchanged"
+    }
+  ],
+  "views": {
+    "L1": {
+      "before": "diagrams/arch-L1-before.svg",
+      "after": "diagrams/arch-L1-after.svg"
+    },
+    "L2": {
+      "before": "diagrams/arch-L2-before.svg",
+      "after": "diagrams/arch-L2-after.svg"
+    }
+  }
+}

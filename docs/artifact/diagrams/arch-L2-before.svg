@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" id="arch-L2-before" viewBox="0 0 1120 352" width="1120" height="352" role="img" aria-labelledby="arch-L2-before-title arch-L2-before-desc">
+<title id="arch-L2-before-title">devbench containers, before</title>
+<desc id="arch-L2-before-desc">Container view before devbench: the developer directly opens herdr-app panes, runs herdr-core commands for Agent CLIs, and manages Git repos manually with no central work state or config.</desc>
+<defs>
+  <marker id="arch-L2-before-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5E5D59"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#FAF9F5"/>
+<text x="24" y="28" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.1em">ARCHITECTURE · C4 L2 CONTAINERS · BEFORE</text>
+
+<!-- Orthogonal connectors -->
+<path d="M196 144 H260 a8 8 0 0 0 8 -8 V100 a8 8 0 0 1 8 -8 H332" fill="none" stroke="#5E5D59" stroke-width="1.4" marker-end="url(#arch-L2-before-arrow)"/>
+<path d="M196 176 H260 a8 8 0 0 1 8 8 V220 a8 8 0 0 0 8 8 H332" fill="none" stroke="#5E5D59" stroke-width="1.4" marker-end="url(#arch-L2-before-arrow)"/>
+<path d="M512 92 H632" fill="none" stroke="#5E5D59" stroke-width="1.4" marker-end="url(#arch-L2-before-arrow)"/>
+<path d="M812 92 H928" fill="none" stroke="#5E5D59" stroke-width="1.4" marker-end="url(#arch-L2-before-arrow)"/>
+
+<!-- Edge labels -->
+<rect x="234" y="68" width="90" height="16" rx="2" fill="#FAF9F5"/>
+<text x="279" y="80" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">OPEN PANES</text>
+
+<rect x="234" y="236" width="90" height="16" rx="2" fill="#FAF9F5"/>
+<text x="279" y="248" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">MANUAL GIT</text>
+
+<rect x="524" y="68" width="96" height="16" rx="2" fill="#FAF9F5"/>
+<text x="572" y="80" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">SPAWN SHELL</text>
+
+<rect x="832" y="68" width="76" height="16" rx="2" fill="#FAF9F5"/>
+<text x="870" y="80" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">RAW CLI</text>
+
+<!-- Nodes -->
+<rect x="40" y="128" width="156" height="64" rx="6" fill="#FAF9F5"/>
+<rect x="40" y="128" width="156" height="64" rx="6" fill="#FFFFFF" stroke="#8A8880" stroke-width="1"/>
+<text x="118" y="156" fill="#141413" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Developer</text>
+<text x="118" y="175" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">person</text>
+
+<rect x="332" y="60" width="180" height="64" rx="6" fill="#FAF9F5"/>
+<rect x="332" y="60" width="180" height="64" rx="6" fill="#EFEDE6" stroke="#B0AEA5" stroke-width="1"/>
+<text x="422" y="88" fill="#3D3D3A" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">herdr-app</text>
+<text x="422" y="107" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">C4 L2</text>
+
+<rect x="632" y="60" width="180" height="64" rx="6" fill="#FAF9F5"/>
+<rect x="632" y="60" width="180" height="64" rx="6" fill="#EFEDE6" stroke="#B0AEA5" stroke-width="1"/>
+<text x="722" y="88" fill="#3D3D3A" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">herdr-core (hc)</text>
+<text x="722" y="107" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">C4 L2</text>
+
+<rect x="928" y="60" width="160" height="64" rx="6" fill="#FAF9F5"/>
+<rect x="928" y="60" width="160" height="64" rx="6" fill="#EFEDE6" stroke="#B0AEA5" stroke-width="1"/>
+<text x="1008" y="88" fill="#3D3D3A" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Agent CLIs</text>
+<text x="1008" y="107" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">external</text>
+
+<rect x="332" y="196" width="180" height="64" rx="6" fill="#FAF9F5"/>
+<rect x="332" y="196" width="180" height="64" rx="6" fill="#EFEDE6" stroke="#B0AEA5" stroke-width="1"/>
+<text x="422" y="224" fill="#3D3D3A" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Git repos</text>
+<text x="422" y="243" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">external</text>
+
+<!-- Legend -->
+<line x1="24" y1="300" x2="1096" y2="300" stroke="rgba(20,20,19,0.10)" stroke-width="1"/>
+<text x="24" y="323" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.12em">LEGEND</text>
+<rect x="112" y="312" width="20" height="14" rx="2" fill="#EFEDE6" stroke="#B0AEA5"/>
+<text x="140" y="323" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">unchanged</text>
+<rect x="236" y="312" width="20" height="14" rx="2" fill="#FFFFFF" stroke="#8A8880"/>
+<text x="264" y="323" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">actor</text>
+</svg>

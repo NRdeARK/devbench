@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" id="concept-c2" viewBox="0 0 1120 364" width="1120" height="364" role="img" aria-labelledby="concept-c2-title concept-c2-desc">
+<title id="concept-c2-title">C2 4-Tier Agent Hierarchy and 3 Session IDs</title>
+<desc id="concept-c2-desc">Four-tier hierarchy from Dispatcher to Owner to domain worker to decoupled sub-agent, showing the three separate IDs persisted in Work state for every persistent session: hc terminal ID, Herdr pane ID, and native AI session ID plus cwd.</desc>
+<defs>
+  <marker id="concept-c2-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5E5D59"/></marker>
+  <marker id="concept-c2-arrow-new" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#1F6FA8"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#FAF9F5"/>
+<text x="24" y="28" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.1em">C2 · 4-TIER HIERARCHY &amp; THE 3 SESSION IDS</text>
+
+<!-- Horizontal tier chain -->
+<path d="M224 96 H312" fill="none" stroke="#1F6FA8" stroke-width="2" marker-end="url(#concept-c2-arrow-new)"/>
+<path d="M496 96 H584" fill="none" stroke="#1F6FA8" stroke-width="2" marker-end="url(#concept-c2-arrow-new)"/>
+<path d="M776 96 H864" fill="none" stroke="#5E5D59" stroke-width="1.4" stroke-dasharray="5,4" marker-end="url(#concept-c2-arrow)"/>
+
+<!-- Vertical links to 3 tracked IDs -->
+<path d="M404 128 V168 a8 8 0 0 0 8 8 H540" fill="none" stroke="#1F6FA8" stroke-width="1.6"/>
+<path d="M680 128 V168 a8 8 0 0 1 -8 8 H540" fill="none" stroke="#1F6FA8" stroke-width="1.6"/>
+<path d="M540 176 V208" fill="none" stroke="#1F6FA8" stroke-width="1.6" marker-end="url(#concept-c2-arrow-new)"/>
+<path d="M540 176 H224 a8 8 0 0 0 -8 8 V208" fill="none" stroke="#1F6FA8" stroke-width="1.6" marker-end="url(#concept-c2-arrow-new)"/>
+<path d="M540 176 H856 a8 8 0 0 1 8 8 V208" fill="none" stroke="#1F6FA8" stroke-width="1.6" marker-end="url(#concept-c2-arrow-new)"/>
+
+<!-- Edge labels -->
+<rect x="234" y="72" width="68" height="16" rx="2" fill="#FAF9F5"/>
+<text x="268" y="84" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">CREATES</text>
+
+<rect x="506" y="72" width="68" height="16" rx="2" fill="#FAF9F5"/>
+<text x="540" y="84" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">SPAWNS</text>
+
+<rect x="780" y="72" width="80" height="16" rx="2" fill="#FAF9F5"/>
+<text x="820" y="84" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">DELEGATES</text>
+
+<!-- Tier nodes -->
+<rect x="40" y="64" width="184" height="64" rx="6" fill="#FAF9F5"/>
+<rect x="40" y="64" width="184" height="64" rx="6" fill="#141413" stroke="#141413" stroke-width="1"/>
+<text x="132" y="92" fill="#FAF9F5" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">1 · Dispatcher</text>
+<text x="132" y="111" fill="#FAF9F5" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">talks to user</text>
+
+<rect x="312" y="64" width="184" height="64" rx="6" fill="#FAF9F5"/>
+<rect x="312" y="64" width="184" height="64" rx="6" fill="#CFE4F5" stroke="#1F6FA8" stroke-width="1.2"/>
+<text x="404" y="92" fill="#0B3D63" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">2 · Owner</text>
+<text x="404" y="111" fill="#0B3D63" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">1 per work · main pane</text>
+
+<rect x="584" y="64" width="192" height="64" rx="6" fill="#FAF9F5"/>
+<rect x="584" y="64" width="192" height="64" rx="6" fill="#CFE4F5" stroke="#1F6FA8" stroke-width="1.2"/>
+<text x="680" y="92" fill="#0B3D63" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">3 · Domain worker</text>
+<text x="680" y="111" fill="#0B3D63" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">0..N · tabs/splits</text>
+
+<rect x="864" y="64" width="216" height="64" rx="6" fill="#FAF9F5"/>
+<rect x="864" y="64" width="216" height="64" rx="6" fill="#EFEDE6" stroke="#B0AEA5" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="972" y="92" fill="#3D3D3A" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">4 · Sub-agent</text>
+<text x="972" y="111" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">ephemeral · outside devbench</text>
+
+<!-- 3 Session IDs persisted per Owner / worker -->
+<rect x="88" y="208" width="256" height="68" rx="6" fill="#FAF9F5"/>
+<rect x="88" y="208" width="256" height="68" rx="6" fill="#FFFFFF" stroke="#8A8880" stroke-width="1"/>
+<text x="216" y="236" fill="#141413" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">hc terminal ID + name</text>
+<text x="216" y="256" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">owned by herdr-core (t7 / db-slug-role)</text>
+
+<rect x="412" y="208" width="256" height="68" rx="6" fill="#FAF9F5"/>
+<rect x="412" y="208" width="256" height="68" rx="6" fill="#FFFFFF" stroke="#8A8880" stroke-width="1"/>
+<text x="540" y="236" fill="#141413" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Herdr space / tab / pane ID</text>
+<text x="540" y="256" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">owned by herdr-app (visible layout)</text>
+
+<rect x="736" y="208" width="256" height="68" rx="6" fill="#FAF9F5"/>
+<rect x="736" y="208" width="256" height="68" rx="6" fill="#FFFFFF" stroke="#D97757" stroke-width="1.4"/>
+<text x="864" y="236" fill="#141413" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Native AI session ID + cwd</text>
+<text x="864" y="256" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">owned by CLI (survives reboot)</text>
+
+<!-- Legend -->
+<line x1="24" y1="308" x2="1096" y2="308" stroke="rgba(20,20,19,0.10)" stroke-width="1"/>
+<text x="24" y="331" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.12em">LEGEND</text>
+<rect x="112" y="320" width="20" height="14" rx="2" fill="#CFE4F5" stroke="#1F6FA8"/>
+<text x="140" y="331" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">tracked in state.json</text>
+<rect x="308" y="320" width="20" height="14" rx="2" fill="#EFEDE6" stroke="#B0AEA5" stroke-dasharray="3,2"/>
+<text x="336" y="331" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">decoupled delegation layer</text>
+</svg>

@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" id="intent" viewBox="0 0 1264 552" width="1264" height="552" role="img" aria-labelledby="intent-title intent-desc">
+<title id="intent-title">devbench intent swimlane</title>
+<desc id="intent-desc">Swimlane overview of devbench: a user request flows through the devbench plugin (reading external user config) to auto-create a central task work folder with git worktrees and persisted work/session state, opens a workspace/tab/pane via herdr-app, runs and tracks agents (agy, claude, codex) via herdr-core (hc), reports results and native AI session IDs back to the user, and archives the entire work folder and state once done.</desc>
+<defs>
+  <marker id="intent-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5E5D59"/></marker>
+  <marker id="intent-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#D97757"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#FAF9F5"/>
+<text x="24" y="28" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.1em">DEVBENCH · INTENT SWIMLANE OVERVIEW</text>
+
+<!-- Swimlanes -->
+<rect x="24" y="48" width="1216" height="72" fill="none" stroke="rgba(20,20,19,0.10)" stroke-width="1"/>
+<rect x="24" y="48" width="128" height="72" fill="#F0EEE6" stroke="rgba(20,20,19,0.10)" stroke-width="1"/>
+<text x="88" y="88" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">USER</text>
+
+<rect x="24" y="120" width="1216" height="72" fill="none" stroke="rgba(20,20,19,0.10)" stroke-width="1"/>
+<rect x="24" y="120" width="128" height="72" fill="#F0EEE6" stroke="rgba(20,20,19,0.10)" stroke-width="1"/>
+<text x="88" y="160" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">DISPATCHER</text>
+
+<rect x="24" y="192" width="1216" height="72" fill="none" stroke="rgba(20,20,19,0.10)" stroke-width="1"/>
+<rect x="24" y="192" width="128" height="72" fill="#F0EEE6" stroke="rgba(20,20,19,0.10)" stroke-width="1"/>
+<text x="88" y="232" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">WORK &amp; STATE</text>
+
+<rect x="24" y="264" width="1216" height="72" fill="none" stroke="rgba(20,20,19,0.10)" stroke-width="1"/>
+<rect x="24" y="264" width="128" height="72" fill="#F0EEE6" stroke="rgba(20,20,19,0.10)" stroke-width="1"/>
+<text x="88" y="304" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">HERDR-APP</text>
+
+<rect x="24" y="336" width="1216" height="72" fill="none" stroke="rgba(20,20,19,0.10)" stroke-width="1"/>
+<rect x="24" y="336" width="128" height="72" fill="#F0EEE6" stroke="rgba(20,20,19,0.10)" stroke-width="1"/>
+<text x="88" y="376" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">HERDR-CORE</text>
+
+<rect x="24" y="408" width="1216" height="72" fill="none" stroke="rgba(20,20,19,0.10)" stroke-width="1"/>
+<rect x="24" y="408" width="128" height="72" fill="#F0EEE6" stroke="rgba(20,20,19,0.10)" stroke-width="1"/>
+<text x="88" y="448" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">AGENTS</text>
+
+<!-- Arrows -->
+<path d="M320 84 H416 a8 8 0 0 1 8 8 V132" fill="none" stroke="#5E5D59" stroke-width="1.4" marker-end="url(#intent-arrow)"/>
+<path d="M510 156 H622 a8 8 0 0 1 8 8 V204" fill="none" stroke="#5E5D59" stroke-width="1.4" marker-end="url(#intent-arrow)"/>
+<path d="M732 228 H832 a8 8 0 0 1 8 8 V276" fill="none" stroke="#5E5D59" stroke-width="1.4" marker-end="url(#intent-arrow)"/>
+<path d="M840 324 V348" fill="none" stroke="#5E5D59" stroke-width="1.4" marker-end="url(#intent-arrow)"/>
+<path d="M840 396 V420" fill="none" stroke="#5E5D59" stroke-width="1.4" marker-end="url(#intent-arrow)"/>
+<path d="M928 444 H966 a8 8 0 0 0 8 -8 V92 a8 8 0 0 1 8 -8 H1020" fill="none" stroke="#D97757" stroke-width="1.8" marker-end="url(#intent-arrow-accent)"/>
+<path d="M1120 108 V132" fill="none" stroke="#5E5D59" stroke-width="1.4" marker-end="url(#intent-arrow)"/>
+<path d="M1120 180 V204" fill="none" stroke="#5E5D59" stroke-width="1.4" marker-end="url(#intent-arrow)"/>
+
+<!-- Edge Labels -->
+<rect x="342" y="61" width="66" height="16" rx="2" fill="#FAF9F5"/>
+<text x="375" y="73" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">REQUEST</text>
+
+<rect x="528" y="133" width="84" height="16" rx="2" fill="#FAF9F5"/>
+<text x="570" y="145" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">PROVISION</text>
+
+<rect x="752" y="205" width="70" height="16" rx="2" fill="#FAF9F5"/>
+<text x="787" y="217" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">LAYOUT</text>
+
+<rect x="848" y="328" width="52" height="16" rx="2" fill="#FAF9F5"/>
+<text x="852" y="340" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.06em">SPAWN</text>
+
+<rect x="848" y="400" width="74" height="16" rx="2" fill="#FAF9F5"/>
+<text x="852" y="412" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.06em">DISPATCH</text>
+
+<rect x="932" y="294" width="84" height="16" rx="2" fill="#FAF9F5"/>
+<text x="974" y="306" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">REPORT + ID</text>
+
+<rect x="1128" y="112" width="44" height="16" rx="2" fill="#FAF9F5"/>
+<text x="1132" y="124" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.06em">DONE</text>
+
+<rect x="1128" y="184" width="66" height="16" rx="2" fill="#FAF9F5"/>
+<text x="1132" y="196" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.06em">ARCHIVE</text>
+
+<!-- Step Boxes -->
+<rect x="168" y="60" width="152" height="48" rx="6" fill="#FFFFFF" stroke="#8A8880" stroke-width="1"/>
+<text x="244" y="89" fill="#141413" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Give task + repos</text>
+
+<rect x="338" y="132" width="172" height="48" rx="6" fill="#CFE4F5" stroke="#1F6FA8" stroke-width="1"/>
+<text x="424" y="161" fill="#0B3D63" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Read config &amp; route</text>
+
+<rect x="528" y="204" width="204" height="48" rx="6" fill="#CFE4F5" stroke="#1F6FA8" stroke-width="1"/>
+<text x="630" y="233" fill="#0B3D63" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Work dir, worktrees &amp; state</text>
+
+<rect x="752" y="276" width="176" height="48" rx="6" fill="#EFEDE6" stroke="#B0AEA5" stroke-width="1"/>
+<text x="840" y="305" fill="#3D3D3A" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Open space / tab / pane</text>
+
+<rect x="752" y="348" width="176" height="48" rx="6" fill="#EFEDE6" stroke="#B0AEA5" stroke-width="1"/>
+<text x="840" y="377" fill="#3D3D3A" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Run, send &amp; wait (hc)</text>
+
+<rect x="752" y="420" width="176" height="48" rx="6" fill="#EFEDE6" stroke="#B0AEA5" stroke-width="1"/>
+<text x="840" y="449" fill="#3D3D3A" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Owner / domain worker</text>
+
+<rect x="1020" y="60" width="200" height="48" rx="6" fill="#FFFFFF" stroke="#8A8880" stroke-width="1"/>
+<text x="1120" y="89" fill="#141413" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Review / resume in 1 place</text>
+
+<rect x="1020" y="132" width="200" height="48" rx="6" fill="#CFE4F5" stroke="#1F6FA8" stroke-width="1"/>
+<text x="1120" y="161" fill="#0B3D63" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Close ws, state &amp; archive</text>
+
+<rect x="1020" y="204" width="200" height="48" rx="6" fill="#CFE4F5" stroke="#1F6FA8" stroke-width="1"/>
+<text x="1120" y="233" fill="#0B3D63" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Detach &amp; move to archive</text>
+
+<!-- Legend -->
+<line x1="24" y1="504" x2="1240" y2="504" stroke="rgba(20,20,19,0.10)" stroke-width="1"/>
+<text x="24" y="527" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.12em">LEGEND</text>
+<rect x="112" y="516" width="20" height="14" rx="2" fill="#CFE4F5" stroke="#1F6FA8"/>
+<text x="140" y="527" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">new</text>
+<rect x="192" y="516" width="20" height="14" rx="2" fill="#EFEDE6" stroke="#B0AEA5"/>
+<text x="220" y="527" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">existing</text>
+<rect x="304" y="516" width="20" height="14" rx="2" fill="#FFFFFF" stroke="#8A8880"/>
+<text x="332" y="527" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">actor</text>
+<line x1="396" y1="523" x2="424" y2="523" stroke="#D97757" stroke-width="1.6"/>
+<text x="432" y="527" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">result &amp; AI session callback</text>
+</svg>

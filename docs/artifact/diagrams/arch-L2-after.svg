@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" id="arch-L2-after" viewBox="0 0 1184 440" width="1184" height="440" role="img" aria-labelledby="arch-L2-after-title arch-L2-after-desc">
+<title id="arch-L2-after-title">devbench containers, after</title>
+<desc id="arch-L2-after-desc">Container view after devbench: devbench plugin reads gitignored User config, persists Work state, delegates work folders and git worktrees to Worktree manager, arranges panes in herdr-app, and runs Agent CLIs via herdr-core (hc).</desc>
+<defs>
+  <marker id="arch-L2-after-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5E5D59"/></marker>
+  <marker id="arch-L2-after-arrow-new" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#1F6FA8"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#FAF9F5"/>
+<text x="24" y="28" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.1em">ARCHITECTURE · C4 L2 CONTAINERS · AFTER</text>
+
+<!-- Orthogonal connectors (strictly fanned attach points, zero crossings) -->
+<!-- Developer -> devbench plugin -->
+<path d="M180 212 H288" fill="none" stroke="#1F6FA8" stroke-width="2" marker-end="url(#arch-L2-after-arrow-new)"/>
+<!-- devbench plugin -> User config (up) -->
+<path d="M384 180 V116" fill="none" stroke="#1F6FA8" stroke-width="2" marker-end="url(#arch-L2-after-arrow-new)"/>
+<!-- devbench plugin -> Work state (down) -->
+<path d="M384 244 V308" fill="none" stroke="#1F6FA8" stroke-width="2" marker-end="url(#arch-L2-after-arrow-new)"/>
+<!-- devbench plugin right edge fans at y=196, 212, 228 -->
+<path d="M480 196 H548 a8 8 0 0 0 8 -8 V92 a8 8 0 0 1 8 -8 H636" fill="none" stroke="#1F6FA8" stroke-width="2" marker-end="url(#arch-L2-after-arrow-new)"/>
+<path d="M480 212 H636" fill="none" stroke="#1F6FA8" stroke-width="2" marker-end="url(#arch-L2-after-arrow-new)"/>
+<path d="M480 228 H548 a8 8 0 0 1 8 8 V332 a8 8 0 0 0 8 8 H636" fill="none" stroke="#1F6FA8" stroke-width="2" marker-end="url(#arch-L2-after-arrow-new)"/>
+<!-- Worktree manager -> Git repos -->
+<path d="M828 84 H980" fill="none" stroke="#1F6FA8" stroke-width="2" marker-end="url(#arch-L2-after-arrow-new)"/>
+<!-- herdr-core (hc) -> Agent CLIs -->
+<path d="M828 340 H980" fill="none" stroke="#5E5D59" stroke-width="1.4" marker-end="url(#arch-L2-after-arrow)"/>
+
+<!-- Edge labels (opaque masks, 8px offset from lines) -->
+<rect x="190" y="188" width="88" height="16" rx="2" fill="#FAF9F5"/>
+<text x="234" y="200" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">TASK / RESUME</text>
+
+<rect x="392" y="140" width="96" height="16" rx="2" fill="#FAF9F5"/>
+<text x="396" y="152" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.06em">READ CONFIG</text>
+
+<rect x="392" y="268" width="102" height="16" rx="2" fill="#FAF9F5"/>
+<text x="396" y="280" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.06em">SAVE ID/STATE</text>
+
+<rect x="524" y="60" width="104" height="16" rx="2" fill="#FAF9F5"/>
+<text x="576" y="72" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">WORK / ARCHIVE</text>
+
+<rect x="562" y="188" width="66" height="16" rx="2" fill="#FAF9F5"/>
+<text x="595" y="200" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">LAYOUT</text>
+
+<rect x="548" y="348" width="80" height="16" rx="2" fill="#FAF9F5"/>
+<text x="588" y="360" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">RUN &amp; SEND</text>
+
+<rect x="852" y="60" width="104" height="16" rx="2" fill="#FAF9F5"/>
+<text x="904" y="72" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">GIT WORKTREE</text>
+
+<rect x="856" y="316" width="96" height="16" rx="2" fill="#FAF9F5"/>
+<text x="904" y="328" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">START/RESUME</text>
+
+<!-- Col 1: Developer -->
+<rect x="36" y="180" width="144" height="64" rx="6" fill="#FAF9F5"/>
+<rect x="36" y="180" width="144" height="64" rx="6" fill="#FFFFFF" stroke="#8A8880" stroke-width="1"/>
+<text x="108" y="208" fill="#141413" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Developer</text>
+<text x="108" y="227" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">person</text>
+
+<!-- Col 2: User config, devbench plugin, Work state -->
+<rect x="288" y="52" width="192" height="64" rx="6" fill="#FAF9F5"/>
+<rect x="288" y="52" width="192" height="64" rx="6" fill="#CFE4F5" stroke="#1F6FA8" stroke-width="1.2"/>
+<text x="384" y="80" fill="#0B3D63" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">User config</text>
+<text x="384" y="99" fill="#0B3D63" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">C4 L2 · external-first</text>
+
+<rect x="288" y="180" width="192" height="64" rx="6" fill="#FAF9F5"/>
+<rect x="288" y="180" width="192" height="64" rx="6" fill="#CFE4F5" stroke="#1F6FA8" stroke-width="1.2"/>
+<text x="384" y="208" fill="#0B3D63" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">devbench plugin</text>
+<text x="384" y="227" fill="#0B3D63" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">C4 L2 · Rust CLI</text>
+
+<rect x="288" y="308" width="192" height="64" rx="6" fill="#FAF9F5"/>
+<rect x="288" y="308" width="192" height="64" rx="6" fill="#CFE4F5" stroke="#1F6FA8" stroke-width="1.2"/>
+<text x="384" y="336" fill="#0B3D63" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Work state</text>
+<text x="384" y="355" fill="#0B3D63" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">C4 L2 · central store</text>
+
+<!-- Col 3: Worktree manager, herdr-app, herdr-core (hc) -->
+<rect x="636" y="52" width="192" height="64" rx="6" fill="#FAF9F5"/>
+<rect x="636" y="52" width="192" height="64" rx="6" fill="#CFE4F5" stroke="#1F6FA8" stroke-width="1.2"/>
+<text x="732" y="80" fill="#0B3D63" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Worktree manager</text>
+<text x="732" y="99" fill="#0B3D63" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">C4 L2 · new</text>
+
+<rect x="636" y="180" width="192" height="64" rx="6" fill="#FAF9F5"/>
+<rect x="636" y="180" width="192" height="64" rx="6" fill="#EFEDE6" stroke="#B0AEA5" stroke-width="1"/>
+<text x="732" y="208" fill="#3D3D3A" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">herdr-app</text>
+<text x="732" y="227" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">C4 L2 · unchanged</text>
+
+<rect x="636" y="308" width="192" height="64" rx="6" fill="#FAF9F5"/>
+<rect x="636" y="308" width="192" height="64" rx="6" fill="#EFEDE6" stroke="#B0AEA5" stroke-width="1"/>
+<text x="732" y="336" fill="#3D3D3A" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">herdr-core (hc)</text>
+<text x="732" y="355" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">C4 L2 · unchanged</text>
+
+<!-- Col 4: Git repos, Agent CLIs -->
+<rect x="980" y="52" width="168" height="64" rx="6" fill="#FAF9F5"/>
+<rect x="980" y="52" width="168" height="64" rx="6" fill="#EFEDE6" stroke="#B0AEA5" stroke-width="1"/>
+<text x="1064" y="80" fill="#3D3D3A" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Git repos</text>
+<text x="1064" y="99" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">external</text>
+
+<rect x="980" y="308" width="168" height="64" rx="6" fill="#FAF9F5"/>
+<rect x="980" y="308" width="168" height="64" rx="6" fill="#EFEDE6" stroke="#B0AEA5" stroke-width="1"/>
+<text x="1064" y="336" fill="#3D3D3A" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Agent CLIs</text>
+<text x="1064" y="355" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">external</text>
+
+<!-- Legend -->
+<line x1="24" y1="392" x2="1160" y2="392" stroke="rgba(20,20,19,0.10)" stroke-width="1"/>
+<text x="24" y="415" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.12em">LEGEND</text>
+<rect x="112" y="404" width="20" height="14" rx="2" fill="#CFE4F5" stroke="#1F6FA8"/>
+<text x="140" y="415" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">new</text>
+<rect x="192" y="404" width="20" height="14" rx="2" fill="#EFEDE6" stroke="#B0AEA5"/>
+<text x="220" y="415" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">unchanged</text>
+<rect x="316" y="404" width="20" height="14" rx="2" fill="#FFFFFF" stroke="#8A8880"/>
+<text x="344" y="415" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">actor</text>
+</svg>

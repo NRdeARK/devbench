@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" id="arch-L1-after" viewBox="0 0 1080 340" width="1080" height="340" role="img" aria-labelledby="arch-L1-after-title arch-L1-after-desc">
+<title id="arch-L1-after-title">devbench system context, after</title>
+<desc id="arch-L1-after-desc">System context after introducing devbench: one request to devbench provisions Git worktrees, opens Herdr panes and persistent sessions, launches or resumes Agent CLIs, and archives completed folders.</desc>
+<defs>
+  <marker id="arch-L1-after-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5E5D59"/></marker>
+  <marker id="arch-L1-after-arrow-new" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#1F6FA8"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#FAF9F5"/>
+<text x="24" y="28" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.1em">ARCHITECTURE · C4 L1 CONTEXT · AFTER</text>
+
+<!-- Orthogonal connectors -->
+<path d="M196 160 H304" fill="none" stroke="#1F6FA8" stroke-width="2" marker-end="url(#arch-L1-after-arrow-new)"/>
+<path d="M480 144 H536 a8 8 0 0 0 8 -8 V100 a8 8 0 0 1 8 -8 H616" fill="none" stroke="#1F6FA8" stroke-width="2" marker-end="url(#arch-L1-after-arrow-new)"/>
+<path d="M480 176 H536 a8 8 0 0 1 8 8 V212 a8 8 0 0 0 8 8 H616" fill="none" stroke="#1F6FA8" stroke-width="2" marker-end="url(#arch-L1-after-arrow-new)"/>
+<path d="M772 220 H872" fill="none" stroke="#5E5D59" stroke-width="1.4" marker-end="url(#arch-L1-after-arrow)"/>
+
+<!-- Edge labels -->
+<rect x="206" y="136" width="88" height="16" rx="2" fill="#FAF9F5"/>
+<text x="250" y="148" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">TASK / RESUME</text>
+
+<rect x="528" y="68" width="82" height="16" rx="2" fill="#FAF9F5"/>
+<text x="569" y="80" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">WORKTREES</text>
+
+<rect x="530" y="228" width="80" height="16" rx="2" fill="#FAF9F5"/>
+<text x="570" y="240" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">SPACE + HC</text>
+
+<rect x="784" y="196" width="76" height="16" rx="2" fill="#FAF9F5"/>
+<text x="822" y="208" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">SESSIONS</text>
+
+<!-- Nodes -->
+<rect x="40" y="128" width="156" height="64" rx="6" fill="#FAF9F5"/>
+<rect x="40" y="128" width="156" height="64" rx="6" fill="#FFFFFF" stroke="#8A8880" stroke-width="1"/>
+<text x="118" y="156" fill="#141413" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Developer</text>
+<text x="118" y="175" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">person</text>
+
+<rect x="304" y="128" width="176" height="64" rx="6" fill="#FAF9F5"/>
+<rect x="304" y="128" width="176" height="64" rx="6" fill="#CFE4F5" stroke="#1F6FA8" stroke-width="1.2"/>
+<text x="392" y="156" fill="#0B3D63" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">devbench</text>
+<text x="392" y="175" fill="#0B3D63" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">C4 L1 · new plugin</text>
+
+<rect x="616" y="60" width="156" height="64" rx="6" fill="#FAF9F5"/>
+<rect x="616" y="60" width="156" height="64" rx="6" fill="#EFEDE6" stroke="#B0AEA5" stroke-width="1"/>
+<text x="694" y="88" fill="#3D3D3A" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Git repos</text>
+<text x="694" y="107" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">C4 L1</text>
+
+<rect x="616" y="188" width="156" height="64" rx="6" fill="#FAF9F5"/>
+<rect x="616" y="188" width="156" height="64" rx="6" fill="#EFEDE6" stroke="#B0AEA5" stroke-width="1"/>
+<text x="694" y="216" fill="#3D3D3A" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Herdr</text>
+<text x="694" y="235" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">C4 L1</text>
+
+<rect x="872" y="188" width="176" height="64" rx="6" fill="#FAF9F5"/>
+<rect x="872" y="188" width="176" height="64" rx="6" fill="#EFEDE6" stroke="#B0AEA5" stroke-width="1"/>
+<text x="960" y="216" fill="#3D3D3A" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Agent CLIs</text>
+<text x="960" y="235" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">C4 L1</text>
+
+<!-- Legend -->
+<line x1="24" y1="288" x2="1056" y2="288" stroke="rgba(20,20,19,0.10)" stroke-width="1"/>
+<text x="24" y="311" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.12em">LEGEND</text>
+<rect x="112" y="300" width="20" height="14" rx="2" fill="#CFE4F5" stroke="#1F6FA8"/>
+<text x="140" y="311" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">new</text>
+<rect x="192" y="300" width="20" height="14" rx="2" fill="#EFEDE6" stroke="#B0AEA5"/>
+<text x="220" y="311" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">unchanged</text>
+<rect x="316" y="300" width="20" height="14" rx="2" fill="#FFFFFF" stroke="#8A8880"/>
+<text x="344" y="311" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">actor</text>
+</svg>

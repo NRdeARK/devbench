@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" id="uc-tree" viewBox="0 0 1160 448" width="1160" height="448" role="img" aria-labelledby="uc-tree-title uc-tree-desc">
+<title id="uc-tree-title">devbench outcome to use cases tree</title>
+<desc id="uc-tree-desc">Tree from Outcome O1 to five Main use cases (UC-01 through UC-05) and two Affected use cases: UC-07 via devbench plugin and UC-06 via Worktree manager.</desc>
+<defs>
+  <marker id="uc-tree-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5E5D59"/></marker>
+  <marker id="uc-tree-arrow-changed" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#B87800"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#FAF9F5"/>
+<text x="24" y="28" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.1em">USE CASES · OUTCOME TO USE CASES</text>
+
+<!-- Tree connectors (orthogonal elbows, 4px grid) -->
+<path d="M580 112 V140" fill="none" stroke="#5E5D59" stroke-width="1.4"/>
+<path d="M580 140 H138 a8 8 0 0 0 -8 8 V172" fill="none" stroke="#5E5D59" stroke-width="1.4" marker-end="url(#uc-tree-arrow)"/>
+<path d="M580 140 H362 a8 8 0 0 0 -8 8 V172" fill="none" stroke="#5E5D59" stroke-width="1.4" marker-end="url(#uc-tree-arrow)"/>
+<path d="M580 140 V172" fill="none" stroke="#5E5D59" stroke-width="1.4" marker-end="url(#uc-tree-arrow)"/>
+<path d="M580 140 H798 a8 8 0 0 1 8 8 V172" fill="none" stroke="#5E5D59" stroke-width="1.4" marker-end="url(#uc-tree-arrow)"/>
+<path d="M580 140 H1022 a8 8 0 0 1 8 8 V172" fill="none" stroke="#5E5D59" stroke-width="1.4" marker-end="url(#uc-tree-arrow)"/>
+
+<!-- Affected connectors -->
+<path d="M130 232 V300" fill="none" stroke="#B87800" stroke-width="2" stroke-dasharray="5,4" marker-end="url(#uc-tree-arrow-changed)"/>
+<path d="M354 232 V300" fill="none" stroke="#B87800" stroke-width="2" stroke-dasharray="5,4" marker-end="url(#uc-tree-arrow-changed)"/>
+
+<!-- Edge labels (opaque masks, 8px offset from vertical strokes) -->
+<rect x="138" y="258" width="132" height="16" rx="2" fill="#FAF9F5"/>
+<text x="142" y="270" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.06em">VIA PLUGIN PKG</text>
+
+<rect x="362" y="258" width="144" height="16" rx="2" fill="#FAF9F5"/>
+<text x="366" y="270" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.06em">VIA WORKTREE MGR</text>
+
+<!-- Outcome node -->
+<rect x="380" y="52" width="400" height="60" rx="6" fill="#FAF9F5"/>
+<rect x="380" y="52" width="400" height="60" rx="6" fill="#FFFFFF" stroke="#8A8880" stroke-width="1"/>
+<text x="580" y="79" fill="#141413" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Outcome O1</text>
+<text x="580" y="98" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">work folder + worktrees + tracked sessions + archive</text>
+
+<!-- Main UC nodes (5 columns, w=204, gap=20) -->
+<rect x="28" y="172" width="204" height="60" rx="6" fill="#FAF9F5"/>
+<rect x="28" y="172" width="204" height="60" rx="6" fill="#141413" stroke="#141413" stroke-width="1"/>
+<text x="130" y="199" fill="#FAF9F5" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">UC-01 Configure</text>
+<text x="130" y="218" fill="#FAF9F5" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">Main · template → config</text>
+
+<rect x="252" y="172" width="204" height="60" rx="6" fill="#FAF9F5"/>
+<rect x="252" y="172" width="204" height="60" rx="6" fill="#141413" stroke="#141413" stroke-width="1"/>
+<text x="354" y="199" fill="#FAF9F5" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">UC-02 Setup workspace</text>
+<text x="354" y="218" fill="#FAF9F5" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">Main · folder + worktrees</text>
+
+<rect x="476" y="172" width="208" height="60" rx="6" fill="#FAF9F5"/>
+<rect x="476" y="172" width="208" height="60" rx="6" fill="#141413" stroke="#141413" stroke-width="1"/>
+<text x="580" y="199" fill="#FAF9F5" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">UC-03 Launch session</text>
+<text x="580" y="218" fill="#FAF9F5" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">Main · Owner / worker ID</text>
+
+<rect x="704" y="172" width="204" height="60" rx="6" fill="#FAF9F5"/>
+<rect x="704" y="172" width="204" height="60" rx="6" fill="#141413" stroke="#141413" stroke-width="1"/>
+<text x="806" y="199" fill="#FAF9F5" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">UC-04 Inspect/resume</text>
+<text x="806" y="218" fill="#FAF9F5" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">Main · status + resume</text>
+
+<rect x="928" y="172" width="204" height="60" rx="6" fill="#FAF9F5"/>
+<rect x="928" y="172" width="204" height="60" rx="6" fill="#141413" stroke="#141413" stroke-width="1"/>
+<text x="1030" y="199" fill="#FAF9F5" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">UC-05 Archive work</text>
+<text x="1030" y="218" fill="#FAF9F5" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">Main · close ws + archive</text>
+
+<!-- Affected UC nodes -->
+<rect x="28" y="300" width="204" height="60" rx="6" fill="#FAF9F5"/>
+<rect x="28" y="300" width="204" height="60" rx="6" fill="#FFFFFF" stroke="#B87800" stroke-width="1.2" stroke-dasharray="4,3"/>
+<text x="130" y="327" fill="#5C3A00" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">UC-07 Plugin updates</text>
+<text x="130" y="346" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">Affected · keep config</text>
+
+<rect x="252" y="300" width="204" height="60" rx="6" fill="#FAF9F5"/>
+<rect x="252" y="300" width="204" height="60" rx="6" fill="#FFFFFF" stroke="#B87800" stroke-width="1.2" stroke-dasharray="4,3"/>
+<text x="354" y="327" fill="#5C3A00" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">UC-06 Main repos clean</text>
+<text x="354" y="346" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">Affected · git isolation</text>
+
+<!-- Legend -->
+<line x1="24" y1="392" x2="1136" y2="392" stroke="rgba(20,20,19,0.10)" stroke-width="1"/>
+<text x="24" y="416" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.12em">LEGEND</text>
+<rect x="112" y="405" width="20" height="14" rx="2" fill="#FFFFFF" stroke="#8A8880"/>
+<text x="140" y="416" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">outcome</text>
+<rect x="220" y="405" width="20" height="14" rx="2" fill="#141413" stroke="#141413"/>
+<text x="248" y="416" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">main use case</text>
+<rect x="372" y="405" width="20" height="14" rx="2" fill="#FFFFFF" stroke="#B87800" stroke-dasharray="3,2"/>
+<text x="400" y="416" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">affected use case</text>
+</svg>

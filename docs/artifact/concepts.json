@@ -1,0 +1,112 @@
+{
+  "concepts": [
+    {
+      "id": "C1",
+      "label": "new pattern",
+      "title": "A Work (Central folder + 1:1 Herdr workspace)",
+      "plain": "Every task gets its own dedicated folder holding all repo worktrees and notes, paired 1-to-1 with its own Herdr workspace and tracked centrally by the Dispatcher.",
+      "before": "Branches, terminals, and notes for one task were scattered across separate repo folders and shared Herdr tabs.",
+      "now": "One slug maps to one work folder (<work-root>/<slug>/), one branch set across target repos, one dedicated Herdr workspace, and one central record in ~/.devbench/state/works/<slug>.json.",
+      "why": "You can inspect, pause, resume, or archive an entire multi-repo effort as a single unit without risking collateral damage to other active tasks.",
+      "analogy": "A dedicated project desk: every blueprint for that job sits on one table, logged on one central whiteboard, and when it finishes you box the whole desk at once.",
+      "summary": "A Work is the top-level lifecycle unit (creating -> active -> archiving -> archived). Inside <work-root>/<slug>/ live optional notes and one git worktree per involved repository, while its live state lives centrally at ~/.devbench/state/works/<slug>.json so the Dispatcher sees every work instantly. Archiving closes the 1:1 Herdr workspace first to release file locks, detaches clean worktrees while keeping git branches in their source repos, copies a frozen state snapshot into the folder, and moves it to the archive root.",
+      "terms": "work slug, central work folder, 1:1 Herdr workspace, work lifecycle",
+      "diagram": "diagrams/concept-c1.svg",
+      "decisions": [
+        "D1",
+        "D2",
+        "D6"
+      ],
+      "ucs": [
+        "UC-02",
+        "UC-05",
+        "UC-06"
+      ],
+      "components": [
+        "CMP-WORKTREE",
+        "CMP-STATE",
+        "CMP-HERDR-APP"
+      ]
+    },
+    {
+      "id": "C2",
+      "label": "new pattern",
+      "title": "4-Tier Agent Hierarchy & the 3 Session IDs",
+      "plain": "Work flows cleanly down Dispatcher -> Owner -> (domain) worker -> decoupled sub-agent, and every persistent session tracks three distinct IDs so nothing gets lost.",
+      "before": "Every terminal looked identical; users had to remember which pane ran which role and lost native AI session IDs whenever a terminal closed.",
+      "now": "devbench manages persistent Owner and domain-worker sessions (leaving ephemeral sub-agents to the separate delegation layer) and saves each session's hc terminal ID, Herdr pane ID, and native AI session ID plus its cwd.",
+      "why": "Each ID has a different lifetime: when a Herdr pane or hc terminal disappears after a reboot, the saved native AI session ID and cwd let devbench resume the exact conversation.",
+      "analogy": "A hotel reservation: the room number (Herdr pane), keycard (hc terminal), and guest record (native AI session ID) are tracked separately so losing a keycard never erases the guest.",
+      "summary": "The Dispatcher creates the work and launches the Owner in the primary pane; the Owner coordinates optional domain workers (e.g. backend, frontend, docs) in tabs or splits inside the same 1:1 Herdr workspace. Ephemeral sub-agents stay outside devbench. Because Claude and Codex resume commands are cwd-scoped, state.json persists each session's exact cwd alongside capture status (auto, manual, pending, unavailable).",
+      "terms": "Dispatcher, Owner, domain worker, sub-agent, hc terminal ID, Herdr pane ID, native AI session ID",
+      "diagram": "diagrams/concept-c2.svg",
+      "decisions": [
+        "D2",
+        "D5"
+      ],
+      "ucs": [
+        "UC-03",
+        "UC-04"
+      ],
+      "components": [
+        "CMP-PLUGIN",
+        "CMP-STATE",
+        "CMP-HERDR-CORE"
+      ]
+    },
+    {
+      "id": "C3",
+      "label": "existing boundary",
+      "title": "Herdr Split: herdr-core Keeps Alive, herdr-app Shows",
+      "plain": "herdr-core (hc) keeps agent processes alive in the background while herdr-app only controls what you see in spaces, tabs, and panes.",
+      "before": "By default, hc kills every child terminal the moment its parent (the Dispatcher tab) closes or restarts, wiping out active Owners; meanwhile unlabeled hc terminals stay invisible in the Herdr window.",
+      "now": "devbench creates the visible workspace via herdr-app space.new, then launches the agent via hc run --bg --outlive-parent with herdr.space=<id> — meaning it survives Dispatcher exit (NOT a zombie process: closing the pane/space or archiving still kills it cleanly) — and checks first_message.sent before reporting ready.",
+      "why": "Separating an Owner's lifetime from the Dispatcher tab prevents accidental kills when you restart or close the Dispatcher, while pane close and archive still free memory cleanly — and checking first_message.sent prevents blind resends on trust prompts.",
+      "analogy": "A theater stage (herdr-app) vs backstage machinery (herdr-core): closing the curtain doesn't stop the engine running backstage, and switching off a room's pane or archiving shuts its engine down cleanly.",
+      "summary": "In herdr-core, 'parent' refers to the Dispatcher terminal that spawned the session. Passing --outlive-parent only prevents active Owner/worker sessions from being killed when you close or restart the Dispatcher — it does not create zombie processes, because closing a pane/space in Herdr or running devbench archive explicitly kills and removes those terminals to free RAM and Windows file locks. Attaching herdr.space=<id> keeps them visible in the 1:1 workspace, and --no-daemon keeps Codex commands inside hc.",
+      "terms": "herdr-core (hc), herdr-app, --outlive-parent, herdr.space label, first_message.sent",
+      "diagram": "diagrams/concept-c3.svg",
+      "decisions": [
+        "D2",
+        "D8"
+      ],
+      "ucs": [
+        "UC-03",
+        "UC-04",
+        "UC-05"
+      ],
+      "components": [
+        "CMP-PLUGIN",
+        "CMP-HERDR-APP",
+        "CMP-HERDR-CORE"
+      ]
+    },
+    {
+      "id": "C4",
+      "label": "new architecture",
+      "title": "Three Separated Stores & Live Reconciliation",
+      "plain": "Plugin code, external user config, and central Dispatcher work state live in three separate places — and Herdr is always treated as live truth over saved state.",
+      "before": "Personal paths, orchestration scripts, and ad-hoc notes lived together, so plugin updates risked wiping settings and stale files misled status checks.",
+      "now": "Generic plugin code + config.example.json stay in the marketplace repo; personal config lives externally at ~/.devbench/config.json; work state lives centrally at ~/.devbench/state/works/<slug>.json so the Dispatcher reads all works instantly and reconciles against live hc/herdr-app.",
+      "why": "Updating the plugin never clobbers personal paths or aliases, pushing code never leaks private paths, the Dispatcher sees every work in one place without scanning folders, and crashed operations recover cleanly from atomic phase checkpoints.",
+      "analogy": "A cookbook (plugin code), your pantry list (user config), and a central kitchen order board (work state) — updating the cookbook never erases your pantry or active orders.",
+      "summary": "Plugin code (Rust binary + manifests) is read-only inside marketplace caches; user config carries schema_version and is checked against config.example.json without auto-overwriting; central work state lives at ~/.devbench/state/works/<slug>.json completely outside every git worktree, uses per-work locks and atomic renames, records operation phases for crash recovery, and drops a frozen snapshot into the archive folder on completion.",
+      "terms": "plugin code, config template, user config, work state, live reconciliation, phase checkpoint",
+      "diagram": "diagrams/concept-c4.svg",
+      "decisions": [
+        "D4",
+        "D9"
+      ],
+      "ucs": [
+        "UC-01",
+        "UC-04",
+        "UC-07"
+      ],
+      "components": [
+        "CMP-PLUGIN",
+        "CMP-CONFIG",
+        "CMP-STATE"
+      ]
+    }
+  ]
+}

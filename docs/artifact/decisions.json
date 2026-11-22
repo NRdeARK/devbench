@@ -1,0 +1,531 @@
+{
+  "tree_diagram": "diagrams/decision-tree.svg",
+  "decisions": [
+    {
+      "id": "D1",
+      "title": "Work folder and git worktree layout",
+      "status": "decided",
+      "date": "2026-11-21",
+      "ucs": [
+        "UC-02",
+        "UC-05",
+        "UC-06"
+      ],
+      "components": [
+        "CMP-WORKTREE"
+      ],
+      "choice_reason": "Grouping all repo worktrees for a task inside one central folder under the configured work root makes multi-repo inspection and one-step archiving effortless.",
+      "options": [
+        {
+          "id": "A",
+          "title": "Central per-work folder (<work-root>/<work-slug>/<repo>)",
+          "status": "chosen",
+          "reason": "Keeps every repo worktree and work note for one task in a single self-contained folder that can be archived in one step.",
+          "pros": "Multi-repo friendly, clean source repos, one-step archive",
+          "cons": "Requires configured work root path",
+          "cost": "low",
+          "risk": "low",
+          "ucs": [
+            "UC-02",
+            "UC-05",
+            "UC-06"
+          ]
+        },
+        {
+          "id": "B",
+          "title": "Sibling worktree folders next to each repo",
+          "status": "rejected",
+          "reason": "Scatters multi-repo tasks across multiple parent folders and prevents archiving a work as one unit.",
+          "pros": "No separate work root needed",
+          "cons": "Scattered multi-repo tasks, manual cleanup per repo",
+          "cost": "low",
+          "risk": "medium",
+          "ucs": [
+            "UC-02"
+          ]
+        },
+        {
+          "id": "C",
+          "title": "Hidden .worktrees/ inside each repo",
+          "status": "rejected",
+          "reason": "Pollutes source repositories with nested checkouts and cannot hold cross-repo tasks cleanly.",
+          "pros": "Co-located with repo",
+          "cons": "Nested .git tooling quirks, no central task folder",
+          "cost": "low",
+          "risk": "medium",
+          "ucs": [
+            "UC-02",
+            "UC-06"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "D2",
+      "title": "Agent hierarchy and Herdr workspace mapping",
+      "status": "decided",
+      "date": "2026-11-21",
+      "ucs": [
+        "UC-03",
+        "UC-04",
+        "UC-05"
+      ],
+      "components": [
+        "CMP-PLUGIN",
+        "CMP-STATE",
+        "CMP-HERDR-APP",
+        "CMP-HERDR-CORE"
+      ],
+      "choice_reason": "A 4-tier hierarchy (Dispatcher -> Owner -> domain worker -> decoupled sub-agent) with 1 work : 1 Herdr workspace gives clear task ownership and makes closing panes on archive completely safe.",
+      "options": [
+        {
+          "id": "A",
+          "title": "Dispatcher -> Owner -> (domain) worker with 1 work : 1 Herdr workspace",
+          "status": "chosen",
+          "reason": "Maps each work cleanly to one dedicated Herdr workspace (Owner in main pane, domain workers in tabs/panes) while keeping ephemeral sub-agent quota routing decoupled.",
+          "pros": "Clear ownership, safe 1:1 workspace close on archive, decoupled quota layer",
+          "cons": "Creates one Herdr workspace per active task",
+          "cost": "low",
+          "risk": "low",
+          "ucs": [
+            "UC-03",
+            "UC-04",
+            "UC-05"
+          ]
+        },
+        {
+          "id": "B",
+          "title": "Flat tabs inside one shared Herdr workspace",
+          "status": "rejected",
+          "reason": "Mixes unrelated tasks in one workspace and risks closing another work's pane during archive.",
+          "pros": "Fewer Herdr workspaces",
+          "cons": "Cluttered tabs, unsafe bulk close on archive",
+          "cost": "low",
+          "risk": "high",
+          "ucs": [
+            "UC-03",
+            "UC-05"
+          ]
+        },
+        {
+          "id": "C",
+          "title": "Bundle sub-agent quota routing inside devbench",
+          "status": "rejected",
+          "reason": "Mixes workspace/session management with billing and sub-agent delegation policy that belongs in its own layer.",
+          "pros": "Single plugin for all agent calls",
+          "cons": "Tightly couples personal quota rules to a public neutral plugin",
+          "cost": "medium",
+          "risk": "medium",
+          "ucs": [
+            "UC-03"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "D3",
+      "title": "Harness and model selection on session creation",
+      "status": "decided",
+      "date": "2026-11-21",
+      "ucs": [
+        "UC-01",
+        "UC-03"
+      ],
+      "components": [
+        "CMP-PLUGIN",
+        "CMP-CONFIG"
+      ],
+      "choice_reason": "Keep v1 focused on reliable workspaces, session state, and archiving; revisit automatic work-type to harness/model lookup tables after v1 is stable.",
+      "options": [
+        {
+          "id": "A",
+          "title": "Direct harness/CLI choice or default from config",
+          "status": "chosen",
+          "reason": "Zero extra routing config in v1; launches the requested CLI or configured default directly.",
+          "pros": "Simple, predictable, minimal config schema",
+          "cons": "User specifies non-default harness manually per session",
+          "cost": "low",
+          "risk": "low",
+          "ucs": [
+            "UC-01",
+            "UC-03"
+          ]
+        },
+        {
+          "id": "B",
+          "title": "Work-type to harness/model recommendation table",
+          "status": "deferred",
+          "reason": "Useful optimization once core orchestration is proven, but not required for v1.",
+          "revisit_when": "After v1 workspace setup, session state tracking, and archive flows are stable in daily use.",
+          "pros": "Auto-picks ideal harness/model per work type",
+          "cons": "Extra schema and maintenance before core flow is validated",
+          "cost": "medium",
+          "risk": "low",
+          "ucs": [
+            "UC-01",
+            "UC-03"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "D4",
+      "title": "User config location and plugin-update safety",
+      "status": "decided",
+      "date": "2026-11-21",
+      "ucs": [
+        "UC-01",
+        "UC-07"
+      ],
+      "components": [
+        "CMP-PLUGIN",
+        "CMP-CONFIG"
+      ],
+      "choice_reason": "External-first ($DEVBENCH_CONFIG -> ~/.devbench/config.json) shares one config across agy, claude, and codex and survives versioned marketplace cache updates, while keeping an optional gitignored local fallback for repo dev mode.",
+      "options": [
+        {
+          "id": "A",
+          "title": "External-first ($DEVBENCH_CONFIG -> ~/.devbench/config.json) + optional gitignored local fallback in repo dev mode",
+          "status": "chosen",
+          "reason": "Immune to versioned marketplace cache updates across Claude/Antigravity/Codex, shares one config across all harnesses, and still supports local gitignored config.json when developing from a clone.",
+          "pros": "Immune to versioned marketplace cache updates (Claude/agy replace cache dirs per version) while still letting repo contributors test a gitignored config.json locally; pairs with devbench config check",
+          "cons": "Two documented lookup tiers (external wins over repo-local)",
+          "cost": "low",
+          "risk": "low",
+          "ucs": [
+            "UC-01",
+            "UC-07"
+          ]
+        },
+        {
+          "id": "B",
+          "title": "External config only (~/.devbench/config.json / DEVBENCH_CONFIG), seeded from committed config.example.json",
+          "status": "rejected",
+          "reason": "Option A already defaults to external config while keeping convenient local fallback for repo development.",
+          "pros": "Single unambiguous path, zero risk of orphaning config inside a versioned plugin cache, mirrors diagram-design (~/.diagram-design)",
+          "cons": "Config always lives outside the plugin folder",
+          "cost": "low",
+          "risk": "low",
+          "ucs": [
+            "UC-01",
+            "UC-07"
+          ]
+        },
+        {
+          "id": "C",
+          "title": "Gitignored config.json inside plugin folder only",
+          "status": "rejected",
+          "reason": "Marketplace plugin updates create new versioned cache folders (verified in ~/.claude/plugins/cache/) and orphan or wipe local config.",
+          "pros": "Right next to config.example.json when developing from a local git clone",
+          "cons": "Marketplace plugin updates create new versioned cache folders and orphan or wipe local config",
+          "cost": "low",
+          "risk": "high",
+          "ucs": [
+            "UC-01"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "D5",
+      "title": "How native AI session IDs are captured for resume",
+      "status": "decided",
+      "date": "2026-11-21",
+      "ucs": [
+        "UC-03",
+        "UC-04"
+      ],
+      "components": [
+        "CMP-PLUGIN",
+        "CMP-STATE",
+        "CMP-HERDR-CORE"
+      ],
+      "choice_reason": "Hybrid capture with recheck on resume gives automatic IDs where supported while letting the Dispatcher plug in a saved or user-supplied ID on resume without ever blocking launch.",
+      "options": [
+        {
+          "id": "A",
+          "title": "Hybrid: per-harness adapters (Claude --session-id, Codex rollout scan + --no-daemon, agy manual bind) + recheck or pass ID on resume",
+          "status": "chosen",
+          "reason": "Best-effort capture on launch with saved cwd, rechecked in central state on resume (or accepting an explicit session ID from the user) so launch never fails on CLI changes.",
+          "pros": "Automatic where supported, never blocks launch on unknown CLIs (capture: auto|manual|pending|unavailable), stores cwd because Claude/Codex resume is cwd-scoped",
+          "cons": "Small per-harness adapter contract to maintain; native IDs remain machine-local (cross-device degrades to branch checkout + handoff note)",
+          "cost": "medium",
+          "risk": "low",
+          "ucs": [
+            "UC-03",
+            "UC-04"
+          ]
+        },
+        {
+          "id": "B",
+          "title": "Strict CLI auto-capture only (no manual bind fallback)",
+          "status": "rejected",
+          "reason": "Too fragile when upstream CLI flags or log formats change and prevents passing a known session ID manually.",
+          "pros": "Fully automated UX when every CLI flag and log format matches",
+          "cons": "Breaks launch or resume whenever upstream CLI flags or log schemas change",
+          "cost": "medium",
+          "risk": "high",
+          "ucs": [
+            "UC-03",
+            "UC-04"
+          ]
+        },
+        {
+          "id": "C",
+          "title": "Self-reported by agent or user into state only",
+          "status": "rejected",
+          "reason": "Loses session IDs whenever an agent exits or crashes before reporting.",
+          "pros": "Zero coupling to upstream CLI internals",
+          "cons": "Session ID is lost if the agent exits or crashes before reporting",
+          "cost": "low",
+          "risk": "medium",
+          "ucs": [
+            "UC-03",
+            "UC-04"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "D6",
+      "title": "Worktree and branch handling during Archive",
+      "status": "decided",
+      "date": "2026-11-21",
+      "ucs": [
+        "UC-05",
+        "UC-06"
+      ],
+      "components": [
+        "CMP-WORKTREE",
+        "CMP-STATE"
+      ],
+      "choice_reason": "Closing Herdr first releases Windows file locks, blocking dirty trees protects uncommitted edits (with optional --snapshot-wip), and detaching clean worktrees preserves branches without duplicating repo files.",
+      "options": [
+        {
+          "id": "A",
+          "title": "Close Herdr space first, block on dirty/untracked (offer --snapshot-wip), warn on unpushed/ignored files, detach worktrees, keep branches, archive notes + git summary + frozen state snapshot",
+          "status": "chosen",
+          "reason": "Releases Windows file locks before git worktree remove, avoids broken .git pointers, keeps git branches intact in source repos, and produces a lightweight self-describing archive folder.",
+          "pros": "Releases Windows file locks before git worktree remove, zero broken .git pointers, branches and SHAs preserved safely in source repos, lightweight archive",
+          "cons": "Archived folder holds notes, git summary, and frozen state rather than full repo source copies",
+          "cost": "low",
+          "risk": "low",
+          "ucs": [
+            "UC-05",
+            "UC-06"
+          ]
+        },
+        {
+          "id": "B",
+          "title": "Detach worktrees and save plain file snapshot (stripped of .git) in archive folder",
+          "status": "rejected",
+          "reason": "Duplicates full repository source trees on disk unnecessarily when git branches already retain full commit history.",
+          "pros": "Archived folder stays directly browsable with final repo files intact",
+          "cons": "Duplicates repo files on disk and slower for large repos",
+          "cost": "medium",
+          "risk": "low",
+          "ucs": [
+            "UC-05",
+            "UC-06"
+          ]
+        },
+        {
+          "id": "C",
+          "title": "Hard-block archive until every branch is merged/pushed, then detach and archive state only",
+          "status": "rejected",
+          "reason": "Too rigid for experimental or paused-forever work; soft warnings on unpushed commits in Option A give safety without blocking.",
+          "pros": "Strongest guard against forgetting unmerged branches",
+          "cons": "Prevents archiving experimental or paused-forever work without a force override",
+          "cost": "low",
+          "risk": "medium",
+          "ucs": [
+            "UC-05",
+            "UC-06"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "D7",
+      "title": "Implementation runtime for devbench CLI",
+      "status": "decided",
+      "date": "2026-11-21",
+      "ucs": [
+        "UC-01",
+        "UC-02",
+        "UC-03",
+        "UC-04",
+        "UC-05"
+      ],
+      "components": [
+        "CMP-PLUGIN",
+        "CMP-WORKTREE",
+        "CMP-STATE"
+      ],
+      "choice_reason": "A single native Rust binary matches herdr-core and herdr-app with zero runtime dependencies, <5ms startup, safe Windows argv subprocess handling, real file locking, and built-in cargo test.",
+      "options": [
+        {
+          "id": "A",
+          "title": "Rust single native binary (devbench / devbench.exe)",
+          "status": "chosen",
+          "reason": "Zero runtime dependencies, fast startup, rock-solid Windows path/argv/locking support, native serde_json and cargo test, distributed via GitHub Releases alongside the plugin manifests.",
+          "pros": "Zero runtime deps, matches herdr-core/herdr-app architecture, native Windows file locking and argv safety, <5ms startup",
+          "cons": "Requires rustup toolchain to build from source or prebuilt GitHub Release binaries for marketplace users",
+          "cost": "medium",
+          "risk": "low",
+          "ucs": [
+            "UC-01",
+            "UC-02",
+            "UC-03",
+            "UC-04",
+            "UC-05"
+          ]
+        },
+        {
+          "id": "B",
+          "title": "Python 3.9+ stdlib only CLI",
+          "status": "rejected",
+          "reason": "User prefers a compiled native Rust binary over a Python script runtime.",
+          "pros": "No build step, matches generate-artifact",
+          "cons": "Requires py -3 / python3 on PATH and slower interpreter startup",
+          "cost": "low",
+          "risk": "low",
+          "ucs": [
+            "UC-01",
+            "UC-02",
+            "UC-03",
+            "UC-04",
+            "UC-05"
+          ]
+        },
+        {
+          "id": "C",
+          "title": "Node.js (.mjs) or Bash shell scripts",
+          "status": "rejected",
+          "reason": "On Windows, bash resolves to WSL (cannot hit Windows herdr-core pipes cleanly) and lacks native JSON/locking; Node adds a runtime dependency.",
+          "pros": "No compilation step",
+          "cons": "WSL bash breaks Windows Herdr pipes; fragile JSON/locking in shell",
+          "cost": "low",
+          "risk": "high",
+          "ucs": [
+            "UC-01",
+            "UC-02",
+            "UC-03",
+            "UC-04",
+            "UC-05"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "D8",
+      "title": "Herdr launch lifetime and readiness contract",
+      "status": "decided",
+      "date": "2026-11-21",
+      "ucs": [
+        "UC-03",
+        "UC-04",
+        "UC-05"
+      ],
+      "components": [
+        "CMP-PLUGIN",
+        "CMP-HERDR-APP",
+        "CMP-HERDR-CORE"
+      ],
+      "choice_reason": "Two-step space.new + hc run --bg --outlive-parent guarantees Owner and domain-worker terminals survive Dispatcher exit, appear in the 1:1 Herdr workspace, and verify first_message.sent.",
+      "options": [
+        {
+          "id": "A",
+          "title": "space.new + hc run --bg --outlive-parent with herdr.space=<id> label, prefixed names (db-<slug>-<role>), and first_message.sent readiness check",
+          "status": "chosen",
+          "reason": "Prevents child terminals from dying with the Dispatcher, binds visibility to the 1:1 workspace, avoids global hc name collisions, and never blind-resends on trust dialogs.",
+          "pros": "Owner and workers survive when Dispatcher exits (--outlive-parent), stay visible in the 1:1 Herdr space, avoid global hc name collisions, and never blind-resend on trust prompts",
+          "cons": "Two-step launch orchestration (herdr-app space.new then hc run)",
+          "cost": "low",
+          "risk": "low",
+          "ucs": [
+            "UC-03",
+            "UC-04",
+            "UC-05"
+          ]
+        },
+        {
+          "id": "B",
+          "title": "herdr-app do space.new / tab.new --argv --task only",
+          "status": "rejected",
+          "reason": "Gives less direct control over --outlive-parent lifetime, global hc naming, and first_message.sent verification.",
+          "pros": "Single herdr-app call per launch",
+          "cons": "Less direct control over --outlive-parent, hc terminal naming, and first_message.sent verification",
+          "cost": "low",
+          "risk": "medium",
+          "ucs": [
+            "UC-03",
+            "UC-05"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "D9",
+      "title": "Work state location, authority, locking, and crash recovery",
+      "status": "decided",
+      "date": "2026-11-21",
+      "ucs": [
+        "UC-02",
+        "UC-04",
+        "UC-05"
+      ],
+      "components": [
+        "CMP-WORKTREE",
+        "CMP-STATE"
+      ],
+      "choice_reason": "Keeping per-work state files in one central directory (~/.devbench/state/works/<slug>.json) lets the Dispatcher inspect all active and archived works instantly without folder scanning, avoids cross-work lock contention, and keeps state completely outside git worktrees while copying a frozen snapshot into the archive folder on completion.",
+      "options": [
+        {
+          "id": "A",
+          "title": "Central state dir (~/.devbench/state/works/<slug>.json) with per-work lock, atomic tmp+rename, live Herdr reconciliation, phase checkpoints, and frozen archive snapshot",
+          "status": "chosen",
+          "reason": "Gives Dispatcher one central index of every work (active and archived), isolates file locks per work, stays completely outside git worktrees, and copies a frozen snapshot into <archive-root>/<slug>/ on archive.",
+          "pros": "Instant central lookup for Dispatcher, zero cross-work lock contention, outside git repos, resilient phase-checkpoint recovery, self-describing archive snapshot",
+          "cons": "Central state lives outside the work folder (mitigated by copying a frozen snapshot on archive)",
+          "cost": "low",
+          "risk": "low",
+          "ucs": [
+            "UC-02",
+            "UC-04",
+            "UC-05"
+          ]
+        },
+        {
+          "id": "B",
+          "title": "Per-work state inside each work folder (<work>/.devbench/state.json) only",
+          "status": "rejected",
+          "reason": "Forces the Dispatcher to scan work_root and archive_root on every status query and risks losing track when folders are moved.",
+          "pros": "State travels directly with the work folder",
+          "cons": "No central index for Dispatcher; requires recursive directory scans across active and archive roots",
+          "cost": "low",
+          "risk": "medium",
+          "ucs": [
+            "UC-02",
+            "UC-04",
+            "UC-05"
+          ]
+        },
+        {
+          "id": "C",
+          "title": "Single monolithic state.json without lock or phase checkpoints",
+          "status": "rejected",
+          "reason": "Concurrent updates across works collide on one file and mid-archive Windows lock failures can corrupt state.",
+          "pros": "One file for everything",
+          "cons": "Global write contention and corruption risk on crash",
+          "cost": "low",
+          "risk": "high",
+          "ucs": [
+            "UC-02",
+            "UC-05"
+          ]
+        }
+      ]
+    }
+  ]
+}

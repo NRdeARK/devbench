@@ -1,0 +1,611 @@
+{
+  "tree_diagram": "diagrams/uc-tree.svg",
+  "outcomes": [
+    {
+      "id": "O1",
+      "text": "From one request to the Dispatcher, devbench creates a central multi-repo work folder with git worktrees, launches persistent Owner and optional domain-worker sessions in Herdr, tracks Herdr and AI session IDs/states for resumption, and archives the entire work folder cleanly when done.",
+      "ucs": [
+        "UC-01",
+        "UC-02",
+        "UC-03",
+        "UC-04",
+        "UC-05"
+      ]
+    }
+  ],
+  "ucs": [
+    {
+      "id": "UC-01",
+      "tier": "Main",
+      "title": "Configure devbench from template",
+      "source": "draft",
+      "entities": [
+        "User config"
+      ],
+      "summary": "The user installs devbench from its marketplace repo and initializes an external-first user config (~/.devbench/config.json, or $DEVBENCH_CONFIG) from the committed template with their work root, archive root, repo aliases, and default agent CLI commands.",
+      "components": [
+        "CMP-PLUGIN",
+        "CMP-CONFIG"
+      ],
+      "flows": [
+        {
+          "id": "good",
+          "kind": "good",
+          "title": "External user config initialized and validated",
+          "touchpoints": [
+            {
+              "step": "4",
+              "sees": "Validation summary confirming config path, work root, repo aliases, and default agent commands"
+            }
+          ]
+        },
+        {
+          "id": "bad-invalid-json",
+          "kind": "bad",
+          "title": "Malformed JSON or missing required field",
+          "touchpoints": [
+            {
+              "step": "3c",
+              "sees": "Exact JSON line/column or missing required field name with no partial overwrite"
+            }
+          ]
+        },
+        {
+          "id": "bad-bad-repo-path",
+          "kind": "bad",
+          "title": "Configured repo path missing or not a Git repo",
+          "touchpoints": [
+            {
+              "step": "3e",
+              "sees": "List of offending repo aliases and paths to fix before running devbench new"
+            }
+          ]
+        },
+        {
+          "id": "edge-env-override",
+          "kind": "edge",
+          "title": "DEVBENCH_CONFIG environment variable set",
+          "touchpoints": [
+            {
+              "step": "1c",
+              "sees": "Init and validation target the custom DEVBENCH_CONFIG path instead of ~/.devbench/config.json"
+            }
+          ]
+        },
+        {
+          "id": "edge-already-exists",
+          "kind": "edge",
+          "title": "User config file already exists",
+          "touchpoints": [
+            {
+              "step": "2c",
+              "sees": "Existing config left untouched; template diff lists any newly added keys only"
+            }
+          ]
+        }
+      ],
+      "diagram": "diagrams/uc-01.svg",
+      "step_changes": {
+        "1": "added",
+        "2": "added",
+        "3": "added",
+        "4": "added",
+        "1b": "added",
+        "2b": "added"
+      }
+    },
+    {
+      "id": "UC-02",
+      "tier": "Main",
+      "title": "Setup workspace",
+      "source": "draft",
+      "entities": [
+        "Work folder",
+        "Repo worktree",
+        "Work state"
+      ],
+      "summary": "The user starts a named work targeting one or more repos; devbench preflights every repo, creates a central workspace folder under the configured work root, auto-provisions a git worktree and task branch per repo inside it, and writes initial work state centrally.",
+      "components": [
+        "CMP-PLUGIN",
+        "CMP-CONFIG",
+        "CMP-WORKTREE",
+        "CMP-STATE"
+      ],
+      "flows": [
+        {
+          "id": "good",
+          "kind": "good",
+          "title": "Workspace folder, repo worktrees, and central state created",
+          "touchpoints": [
+            {
+              "step": "5",
+              "sees": "Central work folder path, task branch names, worktree paths, and active state record"
+            }
+          ]
+        },
+        {
+          "id": "bad-preflight",
+          "kind": "bad",
+          "title": "Preflight fails (unknown alias, branch exists, or folder collision)",
+          "touchpoints": [
+            {
+              "step": "3c",
+              "sees": "Exact failing repo/branch/folder reason; zero folders or worktrees created"
+            }
+          ]
+        },
+        {
+          "id": "bad-mid-fail",
+          "kind": "bad",
+          "title": "Second repo worktree fails mid-setup",
+          "touchpoints": [
+            {
+              "step": "3f",
+              "sees": "Repo 1 worktree rolled back cleanly, state marked failed, error reported"
+            }
+          ]
+        },
+        {
+          "id": "edge-win-slug",
+          "kind": "edge",
+          "title": "Windows reserved name, case collision, or long path",
+          "touchpoints": [
+            {
+              "step": "2c",
+              "sees": "Sanitized slug suggestion or early stop before hitting Windows 260-char or reserved-name errors"
+            }
+          ]
+        },
+        {
+          "id": "edge-dirty-source",
+          "kind": "edge",
+          "title": "Source repo has local uncommitted changes or duplicate alias",
+          "touchpoints": [
+            {
+              "step": "3h",
+              "sees": "Aliases deduplicated, clean worktree branched from base_ref, base_sha recorded in state"
+            }
+          ]
+        }
+      ],
+      "diagram": "diagrams/uc-02.svg",
+      "step_changes": {
+        "1": "added",
+        "2": "added",
+        "3": "added",
+        "4": "added",
+        "5": "added",
+        "3d": "added",
+        "2b": "added"
+      }
+    },
+    {
+      "id": "UC-03",
+      "tier": "Main",
+      "title": "Launch Owner or domain-worker session and save AI session ID",
+      "source": "draft",
+      "entities": [
+        "Agent session",
+        "Work state"
+      ],
+      "summary": "The Dispatcher (or Owner) opens or reuses the work's dedicated 1:1 Herdr workspace via herdr-app, launches an Owner (primary pane) or domain-worker session (tab or side pane) via herdr-core with --outlive-parent and herdr.space=<id>, verifies first_message.sent, and saves all three session IDs plus cwd centrally.",
+      "components": [
+        "CMP-PLUGIN",
+        "CMP-CONFIG",
+        "CMP-STATE",
+        "CMP-HERDR-APP",
+        "CMP-HERDR-CORE"
+      ],
+      "flows": [
+        {
+          "id": "good",
+          "kind": "good",
+          "title": "Owner or domain-worker session launched and state recorded",
+          "touchpoints": [
+            {
+              "step": "6",
+              "sees": "Confirmation with role/domain, 1:1 Herdr workspace and pane target, hc terminal ID, and saved AI session ID"
+            }
+          ]
+        },
+        {
+          "id": "bad-trust-prompt",
+          "kind": "bad",
+          "title": "Agent paused on trust dialog (first_message.sent=false)",
+          "touchpoints": [
+            {
+              "step": "4d",
+              "sees": "Session marked blocked with hc read screen preview; no blind resend or --force bypass"
+            }
+          ]
+        },
+        {
+          "id": "bad-herdr-down",
+          "kind": "bad",
+          "title": "Herdr app or core not running, or launch fails after space.new",
+          "touchpoints": [
+            {
+              "step": "2c",
+              "sees": "Orphan space cleaned up if created, state marked failed, clear prompt to open Herdr first"
+            }
+          ]
+        },
+        {
+          "id": "edge-relaunch",
+          "kind": "edge",
+          "title": "Target role terminal db-<slug>-<role> is already live",
+          "touchpoints": [
+            {
+              "step": "3c",
+              "sees": "Existing live terminal focused/reused idempotently without spawning a duplicate agent"
+            }
+          ]
+        },
+        {
+          "id": "edge-id-pending",
+          "kind": "edge",
+          "title": "Native AI session ID unavailable at launch (e.g. agy or delayed rollout)",
+          "touchpoints": [
+            {
+              "step": "4f",
+              "sees": "Launch succeeds with capture=pending|manual; Dispatcher can bind or supply ID later on resume"
+            }
+          ]
+        }
+      ],
+      "diagram": "diagrams/uc-03.svg",
+      "step_changes": {
+        "1": "added",
+        "2": "added",
+        "3": "added",
+        "4": "added",
+        "5": "added",
+        "6": "added",
+        "4b": "added"
+      }
+    },
+    {
+      "id": "UC-04",
+      "tier": "Main",
+      "title": "Inspect and resume work or AI session",
+      "source": "draft",
+      "entities": [
+        "Work state",
+        "Agent session"
+      ],
+      "summary": "The user checks all works from the central state directory reconciled against live Herdr, sends follow-up prompts, or resumes a paused or disconnected session by rechecking its saved native AI session ID (or accepting an explicit ID) in its recorded cwd.",
+      "components": [
+        "CMP-PLUGIN",
+        "CMP-STATE",
+        "CMP-HERDR-APP",
+        "CMP-HERDR-CORE"
+      ],
+      "flows": [
+        {
+          "id": "good",
+          "kind": "good",
+          "title": "Central work status reconciled and session resumed",
+          "touchpoints": [
+            {
+              "step": "6",
+              "sees": "Reconciled work/session status table and focused or resumed agent pane"
+            }
+          ]
+        },
+        {
+          "id": "bad-terminal-gone",
+          "kind": "bad",
+          "title": "hc terminal gone after reboot (not_found or finished)",
+          "touchpoints": [
+            {
+              "step": "3d",
+              "sees": "Space recreated if missing; harness relaunched with resume argv and saved or passed session ID in recorded cwd"
+            }
+          ]
+        },
+        {
+          "id": "bad-blocked",
+          "kind": "bad",
+          "title": "Session blocked on permission prompt or worktree missing",
+          "touchpoints": [
+            {
+              "step": "3f",
+              "sees": "Human-attention warning showing screen snippet or missing worktree path; never forces past prompt"
+            }
+          ]
+        },
+        {
+          "id": "edge-live-reattach",
+          "kind": "edge",
+          "title": "hc terminal is still live (even if hidden)",
+          "touchpoints": [
+            {
+              "step": "4c",
+              "sees": "Existing terminal reattached and focused via herdr-app without creating a duplicate session"
+            }
+          ]
+        },
+        {
+          "id": "edge-cross-device",
+          "kind": "edge",
+          "title": "State opened on another device without local AI history",
+          "touchpoints": [
+            {
+              "step": "2c",
+              "sees": "Graceful fallback notice: recreates worktrees from git branches and starts a fresh session with handoff note"
+            }
+          ]
+        }
+      ],
+      "diagram": "diagrams/uc-04.svg",
+      "step_changes": {
+        "1": "added",
+        "2": "added",
+        "3": "added",
+        "4": "added",
+        "5": "added",
+        "6": "added",
+        "3b": "added"
+      }
+    },
+    {
+      "id": "UC-05",
+      "tier": "Main",
+      "title": "Archive completed work folder",
+      "source": "draft",
+      "entities": [
+        "Work folder",
+        "Repo worktree",
+        "Work state",
+        "Agent session"
+      ],
+      "summary": "When the user confirms a work is done, devbench checks dirty/untracked/unpushed/ignored state, closes the 1:1 Herdr workspace and its recorded terminals first to release Windows file locks, detaches clean git worktrees while keeping branches, writes a frozen state snapshot + git summary, and moves the folder to the archive root.",
+      "components": [
+        "CMP-PLUGIN",
+        "CMP-CONFIG",
+        "CMP-WORKTREE",
+        "CMP-STATE",
+        "CMP-HERDR-APP",
+        "CMP-HERDR-CORE"
+      ],
+      "flows": [
+        {
+          "id": "good",
+          "kind": "good",
+          "title": "Herdr workspace closed, worktrees detached, and folder archived",
+          "touchpoints": [
+            {
+              "step": "7",
+              "sees": "Confirmation showing closed Herdr workspace, preserved branch SHAs, frozen snapshot, and final archive path"
+            }
+          ]
+        },
+        {
+          "id": "bad-dirty-tree",
+          "kind": "bad",
+          "title": "Dirty or untracked files found in a worktree",
+          "touchpoints": [
+            {
+              "step": "2c",
+              "sees": "Archive blocked before closing Herdr; affected paths listed with --snapshot-wip option (no silent force)"
+            }
+          ]
+        },
+        {
+          "id": "bad-win-lock",
+          "kind": "bad",
+          "title": "Windows file lock or interrupted cross-drive move",
+          "touchpoints": [
+            {
+              "step": "4d",
+              "sees": "archive_phase checkpoint saved in central state; rerun resumes cleanly from the failed step"
+            }
+          ]
+        },
+        {
+          "id": "edge-self-archive",
+          "kind": "edge",
+          "title": "Archive invoked from inside the work's own Herdr workspace",
+          "touchpoints": [
+            {
+              "step": "1c",
+              "sees": "State flushed safely and caller warned to close its own workspace last or run from Dispatcher"
+            }
+          ]
+        },
+        {
+          "id": "edge-already-closed",
+          "kind": "edge",
+          "title": "Herdr space already closed or archive folder name collides",
+          "touchpoints": [
+            {
+              "step": "3c",
+              "sees": "Stale Herdr IDs tolerated, timestamp suffix appended on collision, unrelated spaces untouched"
+            }
+          ]
+        }
+      ],
+      "diagram": "diagrams/uc-05.svg",
+      "step_changes": {
+        "1": "added",
+        "2": "added",
+        "3": "added",
+        "4": "added",
+        "5": "added",
+        "6": "added",
+        "7": "added",
+        "4b": "added"
+      }
+    },
+    {
+      "id": "UC-06",
+      "tier": "Affected",
+      "title": "Keep main Git checkouts clean and conflict-free",
+      "source": "draft",
+      "caused_by": "CMP-WORKTREE",
+      "entities": [
+        "Repo worktree"
+      ],
+      "summary": "Existing local repositories continue working normally alongside devbench worktrees: branch-checkout collisions are prevented, ignored files are flagged before removal, and git worktree metadata is pruned cleanly after archiving.",
+      "components": [
+        "CMP-WORKTREE"
+      ],
+      "flows": [
+        {
+          "id": "good",
+          "kind": "good",
+          "title": "Source repo stays clean after worktree lifecycle",
+          "touchpoints": [
+            {
+              "step": "3",
+              "sees": "git worktree list shows no stale entries and main checkout stays untouched"
+            }
+          ]
+        },
+        {
+          "id": "bad-branch-in-use",
+          "kind": "bad",
+          "title": "Target branch already checked out in main repo",
+          "touchpoints": [
+            {
+              "step": "1c",
+              "sees": "Stops before mutating main checkout and prompts for a distinct task branch"
+            }
+          ]
+        },
+        {
+          "id": "edge-ignored-files",
+          "kind": "edge",
+          "title": "Gitignored files (e.g. .env) exist inside worktree",
+          "touchpoints": [
+            {
+              "step": "2c",
+              "sees": "Lists ignored files with soft warning before git worktree remove deletes the checkout"
+            }
+          ]
+        },
+        {
+          "id": "edge-stale-admin",
+          "kind": "edge",
+          "title": "Worktree directory was manually deleted outside devbench",
+          "touchpoints": [
+            {
+              "step": "2e",
+              "sees": "git worktree prune removes orphaned .git/worktrees metadata cleanly"
+            }
+          ]
+        }
+      ],
+      "diagram": "diagrams/uc-06.svg",
+      "step_changes": {
+        "1": "changed",
+        "2": "added",
+        "3": "added"
+      }
+    },
+    {
+      "id": "UC-07",
+      "tier": "Affected",
+      "title": "Preserve user config across plugin updates",
+      "source": "draft",
+      "caused_by": "CMP-PLUGIN",
+      "entities": [
+        "User config"
+      ],
+      "summary": "Installing or updating devbench from its marketplace repo in Antigravity, Claude Code, or Codex leaves ~/.devbench/config.json untouched outside versioned plugin caches and reports any new template fields via config check.",
+      "components": [
+        "CMP-PLUGIN",
+        "CMP-CONFIG"
+      ],
+      "flows": [
+        {
+          "id": "good",
+          "kind": "good",
+          "title": "Plugin updates without clobbering external user config",
+          "touchpoints": [
+            {
+              "step": "3",
+              "sees": "Existing ~/.devbench/config.json remains intact and passes schema check"
+            }
+          ]
+        },
+        {
+          "id": "bad-schema-mismatch",
+          "kind": "bad",
+          "title": "New version adds required template keys or bumps schema_version",
+          "touchpoints": [
+            {
+              "step": "2c",
+              "sees": "Lists missing keys with example snippet from config.example.json; never auto-overwrites user file"
+            }
+          ]
+        },
+        {
+          "id": "edge-versioned-cache",
+          "kind": "edge",
+          "title": "Marketplace updater writes to a new versioned cache folder",
+          "touchpoints": [
+            {
+              "step": "1c",
+              "sees": "New cache directory reads the same external ~/.devbench/config.json seamlessly"
+            }
+          ]
+        },
+        {
+          "id": "edge-dev-fallback",
+          "kind": "edge",
+          "title": "Contributor keeps a gitignored local config.json in repo clone",
+          "touchpoints": [
+            {
+              "step": "2e",
+              "sees": "External config wins when present; repo-local gitignored file used only in dev mode fallback"
+            }
+          ]
+        }
+      ],
+      "diagram": "diagrams/uc-07.svg",
+      "step_changes": {
+        "1": "changed",
+        "2": "added",
+        "3": "added"
+      }
+    }
+  ],
+  "crud": [
+    {
+      "entity": "User config",
+      "create": "UC-01",
+      "read": "UC-02",
+      "update": "UC-01",
+      "delete": "n/a: user removes external ~/.devbench/config.json manually on uninstall"
+    },
+    {
+      "entity": "Work folder",
+      "create": "UC-02",
+      "read": "UC-04",
+      "update": "UC-05",
+      "delete": "n/a: archived intact rather than hard-deleted"
+    },
+    {
+      "entity": "Repo worktree",
+      "create": "UC-02",
+      "read": "UC-04",
+      "update": "UC-06",
+      "delete": "UC-05"
+    },
+    {
+      "entity": "Work state",
+      "create": "UC-02",
+      "read": "UC-04",
+      "update": "UC-03",
+      "delete": "n/a: retained in central state index with frozen snapshot copied into archive folder"
+    },
+    {
+      "entity": "Agent session",
+      "create": "UC-03",
+      "read": "UC-04",
+      "update": "UC-04",
+      "delete": "UC-05"
+    }
+  ]
+}

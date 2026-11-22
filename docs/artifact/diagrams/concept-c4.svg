@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" id="concept-c4" viewBox="0 0 1120 356" width="1120" height="356" role="img" aria-labelledby="concept-c4-title concept-c4-desc">
+<title id="concept-c4-title">C4 Three Separated Stores and Live Reconciliation</title>
+<desc id="concept-c4-desc">Plugin code stays read-only in the marketplace cache, personal user config stays external or gitignored outside version control, and per-work state lives in .devbench/state.json while reconciling against live Herdr state on every status or resume.</desc>
+<defs>
+  <marker id="concept-c4-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5E5D59"/></marker>
+  <marker id="concept-c4-arrow-new" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#1F6FA8"/></marker>
+  <marker id="concept-c4-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#D97757"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#FAF9F5"/>
+<text x="24" y="28" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.1em">C4 · THREE SEPARATED STORES &amp; LIVE RECONCILIATION</text>
+
+<!-- Connectors from 3 stores to Runtime -->
+<path d="M180 128 V164 a8 8 0 0 0 8 8 H412" fill="none" stroke="#1F6FA8" stroke-width="1.8" marker-end="url(#concept-c4-arrow-new)"/>
+<path d="M520 128 V204" fill="none" stroke="#1F6FA8" stroke-width="1.8" marker-end="url(#concept-c4-arrow-new)"/>
+<path d="M860 128 V164 a8 8 0 0 1 -8 8 H628" fill="none" stroke="#1F6FA8" stroke-width="1.8" marker-end="url(#concept-c4-arrow-new)"/>
+
+<!-- Live reconciliation from Herdr to Runtime -->
+<path d="M840 236 H628" fill="none" stroke="#D97757" stroke-width="2" marker-end="url(#concept-c4-arrow-accent)"/>
+
+<!-- Edge labels -->
+<rect x="236" y="148" width="100" height="16" rx="2" fill="#FAF9F5"/>
+<text x="286" y="160" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">READ-ONLY CODE</text>
+
+<rect x="528" y="156" width="84" height="16" rx="2" fill="#FAF9F5"/>
+<text x="532" y="168" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.06em">USER PATHS</text>
+
+<rect x="692" y="148" width="124" height="16" rx="2" fill="#FAF9F5"/>
+<text x="754" y="160" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">ATOMIC R/W LOCK</text>
+
+<rect x="656" y="212" width="156" height="16" rx="2" fill="#FAF9F5"/>
+<text x="734" y="224" fill="#6F6D66" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle" letter-spacing="0.06em">LIVE TRUTH RECONCILE</text>
+
+<!-- Row 1: 3 Separated Stores -->
+<rect x="40" y="56" width="280" height="72" rx="6" fill="#FAF9F5"/>
+<rect x="40" y="56" width="280" height="72" rx="6" fill="#CFE4F5" stroke="#1F6FA8" stroke-width="1.2"/>
+<text x="180" y="84" fill="#0B3D63" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">1 · Plugin code</text>
+<text x="180" y="106" fill="#0B3D63" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">NRdeARK/devbench + config.example</text>
+
+<rect x="380" y="56" width="280" height="72" rx="6" fill="#FAF9F5"/>
+<rect x="380" y="56" width="280" height="72" rx="6" fill="#CFE4F5" stroke="#1F6FA8" stroke-width="1.2"/>
+<text x="520" y="84" fill="#0B3D63" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">2 · User config</text>
+<text x="520" y="106" fill="#0B3D63" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">~/.devbench/config.json</text>
+
+<rect x="720" y="56" width="280" height="72" rx="6" fill="#FAF9F5"/>
+<rect x="720" y="56" width="280" height="72" rx="6" fill="#CFE4F5" stroke="#1F6FA8" stroke-width="1.2"/>
+<text x="860" y="84" fill="#0B3D63" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">3 · Central work state</text>
+<text x="860" y="106" fill="#0B3D63" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">~/.devbench/state/works/&lt;slug&gt;.json</text>
+
+<!-- Row 2: Runtime + Live Herdr Truth -->
+<rect x="412" y="204" width="216" height="64" rx="6" fill="#FAF9F5"/>
+<rect x="412" y="204" width="216" height="64" rx="6" fill="#141413" stroke="#141413" stroke-width="1"/>
+<text x="520" y="232" fill="#FAF9F5" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">devbench CLI</text>
+<text x="520" y="251" fill="#FAF9F5" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">status · resume · archive</text>
+
+<rect x="840" y="204" width="240" height="64" rx="6" fill="#FAF9F5"/>
+<rect x="840" y="204" width="240" height="64" rx="6" fill="#EFEDE6" stroke="#B0AEA5" stroke-width="1"/>
+<text x="960" y="232" fill="#3D3D3A" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Herdr (hc + app)</text>
+<text x="960" y="251" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">live runtime source of truth</text>
+
+<!-- Legend -->
+<line x1="24" y1="304" x2="1096" y2="304" stroke="rgba(20,20,19,0.10)" stroke-width="1"/>
+<text x="24" y="327" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.12em">LEGEND</text>
+<rect x="112" y="316" width="20" height="14" rx="2" fill="#CFE4F5" stroke="#1F6FA8"/>
+<text x="140" y="327" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">separated store</text>
+<rect x="272" y="316" width="20" height="14" rx="2" fill="#EFEDE6" stroke="#B0AEA5"/>
+<text x="300" y="327" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">live Herdr</text>
+<line x1="396" y1="323" x2="424" y2="323" stroke="#D97757" stroke-width="2"/>
+<text x="432" y="327" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">reconciliation overrides stale IDs</text>
+</svg>

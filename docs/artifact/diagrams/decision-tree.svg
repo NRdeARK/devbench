@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" id="dtree" viewBox="0 0 1160 468" width="1160" height="468" role="img" aria-labelledby="dtree-title dtree-desc">
+<title id="dtree-title">Solution path tree for devbench</title>
+<desc id="dtree-desc">Completed decision path tree for devbench showing all nine architecture decisions (D1 through D9) decided, with only D3-B (work-type harness table) deferred for post-v1.</desc>
+<defs>
+  <marker id="dtree-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5E5D59"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#FAF9F5"/>
+<text x="24" y="28" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.1em">DECISIONS · SOLUTION PATH TREE (ALL DECIDED)</text>
+
+<!-- Row 1 -> Row 2 bus (y=140, centers 166, 442, 718, 994) -->
+<path d="M580 112 V140" fill="none" stroke="#5E5D59" stroke-width="1.4"/>
+<path d="M580 140 H174 a8 8 0 0 0 -8 8 V172" fill="none" stroke="#5E5D59" stroke-width="1.4" marker-end="url(#dtree-arrow)"/>
+<path d="M580 140 H450 a8 8 0 0 0 -8 8 V172" fill="none" stroke="#5E5D59" stroke-width="1.4" marker-end="url(#dtree-arrow)"/>
+<path d="M580 140 H710 a8 8 0 0 1 8 8 V172" fill="none" stroke="#5E5D59" stroke-width="1.4" marker-end="url(#dtree-arrow)"/>
+<path d="M580 140 H986 a8 8 0 0 1 8 8 V172" fill="none" stroke="#5E5D59" stroke-width="1.4" stroke-dasharray="5,4" marker-end="url(#dtree-arrow)"/>
+
+<!-- Row 2 -> Row 3 chosen branches -->
+<path d="M166 232 V300" fill="none" stroke="#5E5D59" stroke-width="1.4" marker-end="url(#dtree-arrow)"/>
+<path d="M442 232 V300" fill="none" stroke="#5E5D59" stroke-width="1.4" marker-end="url(#dtree-arrow)"/>
+<path d="M718 232 V300" fill="none" stroke="#5E5D59" stroke-width="1.4" marker-end="url(#dtree-arrow)"/>
+<path d="M718 232 V264 a8 8 0 0 0 8 8 H986 a8 8 0 0 1 8 8 V300" fill="none" stroke="#5E5D59" stroke-width="1.4" marker-end="url(#dtree-arrow)"/>
+
+<!-- Row 1: Root problem -->
+<rect x="380" y="52" width="400" height="60" rx="6" fill="#FAF9F5"/>
+<rect x="380" y="52" width="400" height="60" rx="6" fill="#141413" stroke="#141413" stroke-width="1"/>
+<text x="580" y="79" fill="#FAF9F5" font-size="14" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">Manual multi-repo agent workflow</text>
+<text x="580" y="98" fill="#FAF9F5" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">problem</text>
+
+<!-- Row 2: Core pillars + Deferred branch -->
+<rect x="40" y="172" width="252" height="60" rx="6" fill="#FAF9F5"/>
+<rect x="40" y="172" width="252" height="60" rx="6" fill="#141413" stroke="#141413" stroke-width="1"/>
+<text x="166" y="199" fill="#FAF9F5" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">D1  Central work folder</text>
+<text x="166" y="218" fill="#FAF9F5" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">chosen · worktrees per repo</text>
+
+<rect x="316" y="172" width="252" height="60" rx="6" fill="#FAF9F5"/>
+<rect x="316" y="172" width="252" height="60" rx="6" fill="#141413" stroke="#141413" stroke-width="1"/>
+<text x="442" y="199" fill="#FAF9F5" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">D2  4-tier + 1:1 Herdr ws</text>
+<text x="442" y="218" fill="#FAF9F5" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">chosen · sub-agent decoupled</text>
+
+<rect x="592" y="172" width="252" height="60" rx="6" fill="#FAF9F5"/>
+<rect x="592" y="172" width="252" height="60" rx="6" fill="#141413" stroke="#141413" stroke-width="1"/>
+<text x="718" y="199" fill="#FAF9F5" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">D3-A  Direct CLI launch</text>
+<text x="718" y="218" fill="#FAF9F5" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">chosen · lean v1 scope</text>
+
+<rect x="868" y="172" width="252" height="60" rx="6" fill="#FAF9F5"/>
+<rect x="868" y="172" width="252" height="60" rx="6" fill="#E1DEF7" stroke="#5B54B0" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="994" y="199" fill="#2B2672" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">D3-B  Harness table</text>
+<text x="994" y="218" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">deferred · after v1 stable</text>
+
+<!-- Row 3: Decided D4-D9 -->
+<rect x="40" y="300" width="252" height="60" rx="6" fill="#FAF9F5"/>
+<rect x="40" y="300" width="252" height="60" rx="6" fill="#141413" stroke="#141413" stroke-width="1"/>
+<text x="166" y="327" fill="#FAF9F5" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">D6 &amp; D9  Central state + archive</text>
+<text x="166" y="346" fill="#FAF9F5" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">chosen · ~/.devbench/state/</text>
+
+<rect x="316" y="300" width="252" height="60" rx="6" fill="#FAF9F5"/>
+<rect x="316" y="300" width="252" height="60" rx="6" fill="#141413" stroke="#141413" stroke-width="1"/>
+<text x="442" y="327" fill="#FAF9F5" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">D5 &amp; D8  Hybrid ID + Herdr run</text>
+<text x="442" y="346" fill="#FAF9F5" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">chosen · recheck + outlive-parent</text>
+
+<rect x="592" y="300" width="252" height="60" rx="6" fill="#FAF9F5"/>
+<rect x="592" y="300" width="252" height="60" rx="6" fill="#141413" stroke="#141413" stroke-width="1"/>
+<text x="718" y="327" fill="#FAF9F5" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">D4  External-first config</text>
+<text x="718" y="346" fill="#FAF9F5" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">chosen · ~/.devbench/config.json</text>
+
+<rect x="868" y="300" width="252" height="60" rx="6" fill="#FAF9F5"/>
+<rect x="868" y="300" width="252" height="60" rx="6" fill="#141413" stroke="#141413" stroke-width="1"/>
+<text x="994" y="327" fill="#FAF9F5" font-size="13" font-weight="600" font-family="Inter, 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">D7  Rust native binary</text>
+<text x="994" y="346" fill="#FAF9F5" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="middle">chosen · zero runtime deps</text>
+
+<!-- Legend -->
+<line x1="24" y1="404" x2="1136" y2="404" stroke="rgba(20,20,19,0.10)" stroke-width="1"/>
+<text x="24" y="427" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start" letter-spacing="0.12em">LEGEND</text>
+<rect x="112" y="416" width="20" height="14" rx="2" fill="#141413" stroke="#141413"/>
+<text x="140" y="427" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">chosen</text>
+<rect x="216" y="416" width="20" height="14" rx="2" fill="#E1DEF7" stroke="#5B54B0" stroke-dasharray="3,2"/>
+<text x="244" y="427" fill="#5E5D59" font-size="11" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" text-anchor="start">deferred</text>
+</svg>
