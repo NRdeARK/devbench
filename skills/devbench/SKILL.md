@@ -64,7 +64,7 @@ Always check `devbench status` first and use this exact decision matrix:
 | **Parallel or separate-PR track touching the same repo** inside an active initiative | **Reuse the work & add an isolated track** (`<repo>--<track>` on branch `<prefix><slug>--<track>`) in the SAME Herdr space | `devbench spawn <slug> --role worker --track <track> --cwd-repo <alias> --task "..."` |
 | **Need another repo** added to an active initiative | **Attach repo to the existing work** | `devbench add-track <slug> --repo <alias> [--track <track>]` |
 
-> A separate PR in a repo that already has an active work = `--track`, never `devbench new`.
+> Within the same initiative, a separate PR in a repo that already has an active work = `--track`, never `devbench new`. An unrelated initiative or standalone hotfix in the same repo still uses `devbench new`.
 
 > Never spawn two parallel editing sessions into the **same** worktree directory — use `--track <name>` so each parallel track gets its own worktree and branch inside the same Herdr space.
 
