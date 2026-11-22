@@ -74,8 +74,9 @@ Always check `devbench status` first and use this exact decision matrix:
 2. **Keep session lifetime clear (`--outlive-parent`):** `devbench spawn` uses `--outlive-parent` so active Owner/worker sessions survive if this Dispatcher tab restarts or closes. They are **not** zombies — closing a pane/space in Herdr or running `devbench archive` kills and cleans them up.
 3. **Automatic tab labeling:** `devbench` automatically names the workspace's initial shell tab `shell`, the Owner tab `owner`, and worker tabs `worker:<domain>` (including `worker:<track>` when `--domain` is omitted). Only rename manually if you create custom ad-hoc tabs.
 4. **Never blind-resend on trust prompts:** If `spawn` returns `status: "blocked"` (`first_message_sent: false`), display `screen_preview` to the user and wait for them to approve the prompt. Never pass `--force`.
-5. **Thin briefs — say *what*, not *how*:** A brief gives the goal and why, the input files, the rules (no push or publish, never amend, and so on), what counts as done, and where to report. Leave the approach, code and test design to the Owner. For review fixes, point at the review file and say which findings are in scope. Don't rewrite the fixes yourself.
-6. **Confirm before archiving:** Always confirm with the user before calling `devbench archive <slug>`. Archiving inspects ALL repo worktrees and tracks inside the initiative before mutating anything; dirty/untracked worktrees block archive safely by default — offer `--snapshot-wip` (commits WIP to task/track branches) instead of forcing deletion.
+5. **Archive mechanics:** `devbench archive <slug>` inspects ALL repo worktrees and tracks inside the initiative before mutating anything; dirty/untracked worktrees block archive safely by default — offer `--snapshot-wip` (commits WIP to task/track branches) instead of forcing deletion. When to archive, and whether to ask first, comes from the active flow skill.
+
+**Process:** load the active flow skill (default `dev-flow`).
 
 ---
 
@@ -112,7 +113,6 @@ devbench archive <slug> [--snapshot-wip]
 
 ## Owner Brief Template (when spawning an Owner)
 
-Include these details in `--task` so the Owner knows its Tier 2 role:
-- Exact goal, why, and definition of done for this initiative (or track): checks the Owner must run and show. Not the implementation steps (see rule 5).
+Include these details in `--task` so the Owner knows its Tier 2 role (brief content comes from the active flow skill):
 - Target worktree paths inside `<work_root>/<slug>/`.
 - Reminder to follow the `devbench-owner` conventions: stay inside worktrees, spawn parallel track workers with `--track <name>` inside this same work slug when touching the same repo concurrently, and report back when done or blocked via `hc send <dispatcher_terminal_id> "<summary>"`.
