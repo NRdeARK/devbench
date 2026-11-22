@@ -1,15 +1,18 @@
 use crate::adapters::adapter_for;
+use crate::adapters::codex::{codex_sessions_dir, scan_codex_rollouts};
 use crate::archive::archive_work;
 use crate::config::{check_config, init_config, load_config, resolve_config_path};
-use crate::herdr::HerdrClient;
-use crate::paths::sanitize_slug;
+use crate::herdr::{HcGetResult, HerdrClient};
+use crate::paths::{build_hc_name, sanitize_identifier, sanitize_slug};
 use crate::state::{
-    list_works, load_work, save_work, CaptureState, SessionStatus, SessionTier, WorkSession,
-    WorkState,
+    list_works_with_warnings, load_work, mutate_work, save_work, CaptureState, SessionStatus,
+    SessionTier, WorkSession, WorkState, WorkStatus,
 };
 use crate::worktree::setup_workspace;
+use chrono::DateTime;
 use clap::{Parser, Subcommand, ValueEnum};
 use serde_json::json;
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
@@ -49,7 +52,7 @@ pub enum Commands {
         slug: String,
         #[arg(long, value_enum, default_value_t = RoleArg::Owner)]
         role: RoleArg,
-        /// Required when --role worker (e.g. backend, web, docs)
+        /// Required when --role worker (e.g. backend, web, docs; cannot be 'owner')
         #[arg(long)]
         domain: Option<String>,
         /// Agent harness key in config.agents (defaults to config.default_agent)
@@ -93,7 +96,7 @@ pub enum Commands {
         /// Commit uncommitted edits as a WIP snapshot on task branches instead of blocking
         #[arg(long)]
         snapshot_wip: bool,
-        /// Allow running archive from inside the work's own Herdr terminal
+        /// Allow running archive from inside the work's own Herdr terminal (closes own space last)
         #[arg(long)]
         allow_self_archive: bool,
     },
@@ -159,20 +162,26 @@ pub fn run(cli: Cli) -> Result<String, String> {
             session_id,
         } => {
             let slug = sanitize_slug(&slug)?;
-            let mut state = load_work(&slug)?;
-            let session = state
-                .sessions
-                .iter_mut()
-                .find(|s| s.key == key)
-                .ok_or_else(|| format!("Session '{key}' not found in work '{slug}'"))?;
-            session.native_session_id = Some(session_id.clone());
-            session.capture = CaptureState::Manual;
-            session.last_seen_at = WorkState::now_iso();
-            save_work(&mut state)?;
+            let trimmed_id = session_id.trim();
+            if trimmed_id.is_empty() {
+                return Err("--session-id cannot be empty".to_string());
+            }
+            let sid_owned = trimmed_id.to_string();
+            let (_, ()) = mutate_work(&slug, |state| {
+                let session = state
+                    .sessions
+                    .iter_mut()
+                    .find(|s| s.key == key)
+                    .ok_or_else(|| format!("Session '{key}' not found in work '{slug}'"))?;
+                session.native_session_id = Some(sid_owned.clone());
+                session.capture = CaptureState::Manual;
+                session.last_seen_at = WorkState::now_iso();
+                Ok((true, ()))
+            })?;
             Ok(serde_json::to_string_pretty(&json!({
                 "slug": slug,
                 "key": key,
-                "native_session_id": session_id,
+                "native_session_id": sid_owned,
                 "capture": "manual",
             }))
             .unwrap())
@@ -205,17 +214,21 @@ fn cmd_spawn(
 ) -> Result<String, String> {
     let slug = sanitize_slug(raw_slug)?;
     let (_, cfg) = load_config()?;
-    let mut state = load_work(&slug)?;
 
-    let (tier, key, role_suffix) = match role {
-        RoleArg::Owner => (SessionTier::Owner, "owner".to_string(), "owner".to_string()),
+    let (tier, key, clean_domain) = match role {
+        RoleArg::Owner => (SessionTier::Owner, "owner".to_string(), None),
         RoleArg::Worker => {
             let dom = domain
                 .as_deref()
-                .map(|d| sanitize_slug(d))
+                .map(|d| sanitize_identifier("Worker domain", d))
                 .transpose()?
                 .ok_or_else(|| "--domain <name> is required when --role worker".to_string())?;
-            (SessionTier::Worker, format!("worker-{dom}"), dom)
+            if dom == "owner" {
+                return Err(
+                    "Worker --domain cannot be 'owner' (reserved for the Owner tier)".to_string(),
+                );
+            }
+            (SessionTier::Worker, format!("worker-{dom}"), Some(dom))
         }
     };
 
@@ -224,6 +237,14 @@ fn cmd_spawn(
         .agents
         .get(&harness)
         .ok_or_else(|| format!("Unknown agent harness '{harness}' in config.agents"))?;
+
+    let state = load_work(&slug)?;
+    if matches!(state.status, WorkStatus::Archived | WorkStatus::Archiving) {
+        return Err(format!(
+            "Cannot spawn into work '{slug}': status is {:?}",
+            state.status
+        ));
+    }
 
     let cwd = if let Some(alias) = cwd_repo {
         let repo = state
@@ -235,40 +256,78 @@ fn cmd_spawn(
     } else {
         PathBuf::from(&state.work_dir)
     };
+    if !cwd.is_dir() {
+        return Err(format!("Target cwd does not exist: {}", cwd.display()));
+    }
 
     let herdr = HerdrClient::from_config(&cfg.herdr);
-    let hc_name = format!("{}-{}-{}", cfg.herdr.name_prefix, slug, role_suffix);
+    let hc_name = build_hc_name(&cfg.herdr.name_prefix, &slug, clean_domain.as_deref());
 
-    // Idempotent relaunch guard (UC-03 edge case)
-    if let Ok(Some(live_info)) = herdr.hc_get(&hc_name) {
-        if live_info.live {
-            let _ = herdr.agent_focus(&live_info.id);
-            return Ok(serde_json::to_string_pretty(&json!({
-                "reused": true,
-                "slug": slug,
-                "key": key,
-                "hc_terminal_id": live_info.id,
-                "hc_name": hc_name,
-            }))
-            .unwrap());
+    // Idempotent relaunch guard (UC-03 edge case): abort on daemon Err, verify space label match!
+    match herdr.hc_get(&hc_name) {
+        Ok(HcGetResult::Live(live_info)) => {
+            let space_matches = match (&state.herdr_space_id, &live_info.space_label) {
+                (Some(expected), Some(actual)) => expected == actual,
+                _ => true,
+            };
+            if space_matches {
+                let _ = herdr.agent_focus(&live_info.id);
+                // Ensure state records the reused terminal if missing
+                let _ = mutate_work(&slug, |s| {
+                    if let Some(existing) = s.sessions.iter_mut().find(|sess| sess.key == key) {
+                        existing.hc_terminal_id = Some(live_info.id.clone());
+                        existing.last_seen_at = WorkState::now_iso();
+                        Ok((true, ()))
+                    } else {
+                        Ok((false, ()))
+                    }
+                });
+                return Ok(serde_json::to_string_pretty(&json!({
+                    "reused": true,
+                    "slug": slug,
+                    "key": key,
+                    "hc_terminal_id": live_info.id,
+                    "hc_name": hc_name,
+                }))
+                .unwrap());
+            }
+        }
+        Ok(HcGetResult::Finished(_)) | Ok(HcGetResult::NotFound) => {}
+        Err(e) => {
+            return Err(format!(
+                "Cannot check Herdr state before spawn (open Herdr first): {e}"
+            ));
         }
     }
 
-    // Ensure 1:1 Herdr workspace exists
-    let created_space = state.herdr_space_id.is_none();
+    // Ensure 1:1 Herdr workspace exists (recreate if missing)
+    let mut created_space = false;
     let space_id = match state.herdr_space_id.clone() {
-        Some(existing) => existing,
-        None => {
-            let sid = herdr.space_new(
+        Some(existing) if herdr.space_exists(&existing).unwrap_or(true) => existing,
+        _ => {
+            let created = herdr.space_new(
                 &slug,
                 &PathBuf::from(&state.work_dir),
                 cfg.herdr.focus_on_create,
             )?;
-            state.herdr_space_id = Some(sid.clone());
-            state.herdr_space_name = Some(slug.clone());
+            created_space = true;
+            let sid = created.space_id.clone();
+            let init_tid = created.initial_terminal_id.clone();
+            let _ = mutate_work(&slug, |s| {
+                s.herdr_space_id = Some(sid.clone());
+                s.herdr_space_name = Some(slug.clone());
+                s.herdr_space_initial_terminal = init_tid.clone();
+                Ok((true, ()))
+            })?;
             sid
         }
     };
+
+    let existing_native_ids: HashSet<String> = state
+        .sessions
+        .iter()
+        .filter_map(|s| s.native_session_id.clone())
+        .collect();
 
     let adapter = adapter_for(&harness);
     let plan = adapter.prepare_launch(agent_cfg);
@@ -279,27 +338,26 @@ fn cmd_spawn(
         Err(err) => {
             if created_space {
                 let _ = herdr.space_close(&space_id);
-                state.herdr_space_id = None;
-                let _ = save_work(&mut state);
+                let _ = mutate_work(&slug, |s| {
+                    s.herdr_space_id = None;
+                    s.herdr_space_initial_terminal = None;
+                    Ok((true, ()))
+                });
             }
             return Err(format!("Failed to launch {hc_name} via herdr-core: {err}"));
         }
     };
 
-    let (native_id, capture) = adapter.capture_after_launch(&cwd, launched_at, &plan);
-    let first_sent = hc_info.first_message_sent.unwrap_or(true);
-    let (status, screen_preview) = if !first_sent || hc_info.status.as_deref() == Some("blocked") {
-        let preview = herdr.hc_read(&hc_info.id, 30).ok();
-        (SessionStatus::Blocked, preview)
-    } else {
-        (SessionStatus::Running, None)
-    };
+    let (native_id, capture) =
+        adapter.capture_after_launch(&cwd, launched_at, &plan, &existing_native_ids);
+
+    let (status, first_sent, screen_preview) = evaluate_readiness(&herdr, &hc_info, task.is_some());
 
     let now = WorkState::now_iso();
     let session = WorkSession {
         key: key.clone(),
         tier,
-        domain: if key == "owner" { None } else { Some(role_suffix) },
+        domain: clean_domain,
         harness: harness.clone(),
         cwd: cwd.to_string_lossy().to_string(),
         hc_terminal_id: Some(hc_info.id.clone()),
@@ -314,8 +372,12 @@ fn cmd_spawn(
         last_seen_at: now,
     };
 
-    state.upsert_session(session.clone());
-    save_work(&mut state)?;
+    let _ = mutate_work(&slug, |s| {
+        s.herdr_space_id = Some(space_id.clone());
+        s.herdr_space_name = Some(slug.clone());
+        s.upsert_session(session.clone());
+        Ok((true, ()))
+    })?;
 
     Ok(serde_json::to_string_pretty(&json!({
         "reused": false,
@@ -327,60 +389,133 @@ fn cmd_spawn(
     .unwrap())
 }
 
+fn evaluate_readiness(
+    herdr: &HerdrClient,
+    hc_info: &crate::herdr::HcTerminalInfo,
+    had_task: bool,
+) -> (SessionStatus, bool, Option<String>) {
+    if hc_info.status.as_deref() == Some("blocked") {
+        let preview = herdr.hc_read(&hc_info.id, 30).ok();
+        return (SessionStatus::Blocked, false, preview);
+    }
+    if had_task {
+        match (hc_info.first_message_sent, hc_info.first_message_reason.as_deref()) {
+            (Some(true), _) => (SessionStatus::Running, true, None),
+            (Some(false), Some("pending")) => (SessionStatus::Launching, false, None),
+            (Some(false), _) => {
+                let preview = herdr.hc_read(&hc_info.id, 30).ok();
+                (SessionStatus::Blocked, false, preview)
+            }
+            (None, _) => (SessionStatus::Launching, false, None),
+        }
+    } else {
+        (SessionStatus::Running, true, None)
+    }
+}
+
 fn cmd_status(slug_opt: Option<&str>, offline: bool) -> Result<String, String> {
     let herdr_opt = if offline {
         None
     } else {
-        load_config()
-            .ok()
-            .map(|(_, cfg)| HerdrClient::from_config(&cfg.herdr))
+        match load_config() {
+            Ok((_, cfg)) => Some(HerdrClient::from_config(&cfg.herdr)),
+            Err(e) => {
+                // Only proceed offline if no config exists yet; otherwise surface load error
+                if e.contains("not found") {
+                    None
+                } else {
+                    return Err(e);
+                }
+            }
+        }
     };
 
-    let mut works = if let Some(raw_slug) = slug_opt {
-        vec![load_work(&sanitize_slug(raw_slug)?)?]
+    let (mut works, warnings) = if let Some(raw_slug) = slug_opt {
+        (vec![load_work(&sanitize_slug(raw_slug)?)?], Vec::new())
     } else {
-        list_works()?
+        list_works_with_warnings()?
     };
 
     if let Some(herdr) = herdr_opt {
         for work in &mut works {
-            let mut changed = false;
-            for s in &mut work.sessions {
+            if matches!(work.status, WorkStatus::Archived | WorkStatus::Archiving) {
+                continue;
+            }
+            // Probe live Herdr outside the lock, then patch ONLY session fields under lock!
+            let mut updates: Vec<(String, SessionStatus, Option<String>)> = Vec::new();
+            let bound_ids: HashSet<String> = work
+                .sessions
+                .iter()
+                .filter_map(|s| s.native_session_id.clone())
+                .collect();
+
+            for s in &work.sessions {
                 if s.status == SessionStatus::Archived {
                     continue;
                 }
                 let Some(target) = s.hc_terminal_id.clone().or_else(|| s.hc_name.clone()) else {
                     continue;
                 };
-                match herdr.hc_get(&target) {
-                    Ok(Some(info)) => {
-                        let new_status = match info.status.as_deref() {
-                            Some("blocked") => SessionStatus::Blocked,
-                            Some("idle") | Some("done") => SessionStatus::Idle,
-                            Some("working") => SessionStatus::Running,
-                            _ if info.live => SessionStatus::Running,
-                            _ => SessionStatus::Exited,
-                        };
-                        if s.status != new_status {
-                            s.status = new_status;
-                            s.last_seen_at = WorkState::now_iso();
-                            changed = true;
-                        }
-                    }
-                    Ok(None) => {
-                        if s.status != SessionStatus::Lost && s.status != SessionStatus::Exited {
-                            s.status = SessionStatus::Lost;
-                            s.last_seen_at = WorkState::now_iso();
-                            changed = true;
-                        }
-                    }
-                    Err(_) => {
-                        // Herdr daemon unreachable; leave cached state intact
+                let live_status = match herdr.hc_get(&target) {
+                    Ok(HcGetResult::Live(info)) => Some(match info.status.as_deref() {
+                        Some("blocked") => SessionStatus::Blocked,
+                        Some("idle") | Some("done") => SessionStatus::Idle,
+                        Some("working") => SessionStatus::Running,
+                        _ => SessionStatus::Running,
+                    }),
+                    Ok(HcGetResult::Finished(_)) => Some(SessionStatus::Exited),
+                    Ok(HcGetResult::NotFound) => Some(SessionStatus::Lost),
+                    Err(_) => None, // Daemon unreachable: leave cached status unchanged
+                };
+
+                // Re-scan pending Codex sessions on status check too
+                let mut newly_captured = None;
+                if s.harness == "codex" && s.capture == CaptureState::Pending && s.native_session_id.is_none() {
+                    if let (Some(sessions_root), Ok(started_dt)) =
+                        (codex_sessions_dir(), DateTime::parse_from_rfc3339(&s.started_at))
+                    {
+                        let launched_at: SystemTime = started_dt.into();
+                        newly_captured =
+                            scan_codex_rollouts(&sessions_root, PathBuf::from(&s.cwd).as_path(), launched_at, &bound_ids);
                     }
                 }
+
+                if let Some(new_st) = live_status {
+                    if new_st != s.status || newly_captured.is_some() {
+                        updates.push((s.key.clone(), new_st, newly_captured));
+                    }
+                } else if newly_captured.is_some() {
+                    updates.push((s.key.clone(), s.status.clone(), newly_captured));
+                }
             }
-            if changed {
-                let _ = save_work(work);
+
+            if !updates.is_empty() {
+                if let Ok((fresh, _)) = mutate_work(&work.slug, |locked| {
+                    // Never clobber an archive that started concurrently
+                    if matches!(locked.status, WorkStatus::Archived | WorkStatus::Archiving) {
+                        return Ok((false, ()));
+                    }
+                    let mut dirty = false;
+                    for (key, new_st, cap_id) in &updates {
+                        if let Some(sess) = locked.sessions.iter_mut().find(|x| &x.key == key) {
+                            if sess.status != *new_st {
+                                sess.status = new_st.clone();
+                                sess.last_seen_at = WorkState::now_iso();
+                                dirty = true;
+                            }
+                            if let Some(id) = cap_id {
+                                if sess.native_session_id.is_none() {
+                                    sess.native_session_id = Some(id.clone());
+                                    sess.capture = CaptureState::Auto;
+                                    dirty = true;
+                                }
+                            }
+                        }
+                    }
+                    Ok((dirty, ()))
+                }) {
+                    *work = fresh;
+                }
             }
         }
     }
@@ -388,6 +523,7 @@ fn cmd_status(slug_opt: Option<&str>, offline: bool) -> Result<String, String> {
     Ok(serde_json::to_string_pretty(&json!({
         "count": works.len(),
         "works": works,
+        "warnings": warnings,
     }))
     .unwrap())
 }
@@ -395,28 +531,46 @@ fn cmd_status(slug_opt: Option<&str>, offline: bool) -> Result<String, String> {
 fn cmd_resume(raw_slug: &str, key: &str, explicit_id: Option<&str>) -> Result<String, String> {
     let slug = sanitize_slug(raw_slug)?;
     let (_, cfg) = load_config()?;
-    let mut state = load_work(&slug)?;
+    let state = load_work(&slug)?;
     let herdr = HerdrClient::from_config(&cfg.herdr);
 
-    let session_idx = state
-        .sessions
-        .iter()
-        .position(|s| s.key == key)
-        .ok_or_else(|| format!("Session '{key}' not found in work '{slug}'"))?;
-
-    let session = state.sessions[session_idx].clone();
-    let cwd = PathBuf::from(&session.cwd);
-    if !cwd.is_dir() {
+    if matches!(state.status, WorkStatus::Archived | WorkStatus::Archiving) {
         return Err(format!(
-            "Saved cwd does not exist on this machine: {} (if moved to another device, recreate worktrees from branches and start a fresh session with a handoff note)",
-            cwd.display()
+            "Work '{slug}' is {:?}; cannot resume an archived work",
+            state.status
         ));
     }
 
-    // Check if terminal is still live -> reattach/focus instead of duplicating
+    let session = state
+        .sessions
+        .iter()
+        .find(|s| s.key == key)
+        .cloned()
+        .ok_or_else(|| format!("Session '{key}' not found in work '{slug}'"))?;
+
+    let cwd = PathBuf::from(&session.cwd);
+    if !cwd.is_dir() {
+        let cross_host = !state.host_id.is_empty() && state.host_id != WorkState::current_host_id();
+        let hint = if cross_host {
+            format!(
+                "State originated on host '{}' (current host '{}'). Native AI sessions are machine-local; recreate worktrees from git branches and start a fresh session with a handoff note.",
+                state.host_id,
+                WorkState::current_host_id()
+            )
+        } else {
+            "Recreate worktrees from branches or verify work_root.".to_string()
+        };
+        return Err(format!(
+            "Saved cwd does not exist on this machine: {}. {}",
+            cwd.display(),
+            hint
+        ));
+    }
+
+    // Check live Herdr first — ABORT on daemon Err (never duplicate!)
     if let Some(target) = session.hc_terminal_id.as_deref().or(session.hc_name.as_deref()) {
-        if let Ok(Some(info)) = herdr.hc_get(target) {
-            if info.live {
+        match herdr.hc_get(target) {
+            Ok(HcGetResult::Live(info)) => {
                 if info.status.as_deref() == Some("blocked") {
                     let preview = herdr.hc_read(&info.id, 30).unwrap_or_default();
                     return Err(format!(
@@ -433,18 +587,41 @@ fn cmd_resume(raw_slug: &str, key: &str, explicit_id: Option<&str>) -> Result<St
                 }))
                 .unwrap());
             }
+            Ok(HcGetResult::Finished(_)) | Ok(HcGetResult::NotFound) => {}
+            Err(e) => {
+                return Err(format!(
+                    "Cannot verify live Herdr terminal before resume (refusing to launch duplicate): {e}"
+                ));
+            }
         }
     }
 
-    // Recheck saved native AI session ID or use user-supplied override
-    let native_id = explicit_id
-        .map(|s| s.to_string())
-        .or_else(|| session.native_session_id.clone())
-        .ok_or_else(|| {
-            format!(
-                "No native AI session ID saved for '{slug}/{key}'. Pass `--session-id <id>` or run `devbench bind {slug} --key {key} --session-id <id>` first."
-            )
-        })?;
+    // Recheck saved native AI session ID (also re-scan Codex rollouts if pending) or accept explicit override
+    let mut resolved_id = explicit_id
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .or_else(|| session.native_session_id.clone());
+
+    if resolved_id.is_none() && session.harness == "codex" {
+        if let (Some(sessions_root), Ok(started_dt)) = (
+            codex_sessions_dir(),
+            DateTime::parse_from_rfc3339(&session.started_at),
+        ) {
+            let bound: HashSet<String> = state
+                .sessions
+                .iter()
+                .filter_map(|s| s.native_session_id.clone())
+                .collect();
+            let launched_at: SystemTime = started_dt.into();
+            resolved_id = scan_codex_rollouts(&sessions_root, &cwd, launched_at, &bound);
+        }
+    }
+
+    let native_id = resolved_id.ok_or_else(|| {
+        format!(
+            "No native AI session ID saved for '{slug}/{key}'. Pass `--session-id <id>` or run `devbench bind {slug} --key {key} --session-id <id>` first."
+        )
+    })?;
 
     let agent_cfg = cfg
         .agents
@@ -453,16 +630,25 @@ fn cmd_resume(raw_slug: &str, key: &str, explicit_id: Option<&str>) -> Result<St
     let adapter = adapter_for(&session.harness);
     let resume_argv = adapter.build_resume_argv(agent_cfg, &native_id)?;
 
-    // Ensure 1:1 space exists
+    // Ensure 1:1 Herdr space exists (recreate if manually closed)
+    let mut created_space = false;
     let space_id = match state.herdr_space_id.clone() {
-        Some(sid) => sid,
-        None => {
-            let sid = herdr.space_new(
+        Some(sid) if herdr.space_exists(&sid).unwrap_or(false) => sid,
+        _ => {
+            let created = herdr.space_new(
                 &slug,
                 &PathBuf::from(&state.work_dir),
                 cfg.herdr.focus_on_create,
             )?;
-            state.herdr_space_id = Some(sid.clone());
+            created_space = true;
+            let sid = created.space_id.clone();
+            let init_tid = created.initial_terminal_id.clone();
+            let _ = mutate_work(&slug, |s| {
+                s.herdr_space_id = Some(sid.clone());
+                s.herdr_space_name = Some(slug.clone());
+                s.herdr_space_initial_terminal = init_tid.clone();
+                Ok((true, ()))
+            })?;
             sid
         }
     };
@@ -470,27 +656,57 @@ fn cmd_resume(raw_slug: &str, key: &str, explicit_id: Option<&str>) -> Result<St
     let hc_name = session
         .hc_name
         .clone()
-        .unwrap_or_else(|| format!("{}-{}-{}", cfg.herdr.name_prefix, slug, key));
+        .unwrap_or_else(|| build_hc_name(&cfg.herdr.name_prefix, &slug, session.domain.as_deref()));
 
-    let hc_info = herdr.hc_run_persistent(&hc_name, &cwd, &space_id, &resume_argv, None)?;
+    let hc_info = match herdr.hc_run_persistent(&hc_name, &cwd, &space_id, &resume_argv, None) {
+        Ok(info) => info,
+        Err(err) => {
+            if created_space {
+                let _ = herdr.space_close(&space_id);
+                let _ = mutate_work(&slug, |s| {
+                    s.herdr_space_id = None;
+                    s.herdr_space_initial_terminal = None;
+                    Ok((true, ()))
+                });
+            }
+            return Err(format!("Failed to resume {hc_name} via herdr-core: {err}"));
+        }
+    };
 
-    let s = &mut state.sessions[session_idx];
-    s.hc_terminal_id = Some(hc_info.id.clone());
-    s.native_session_id = Some(native_id.clone());
-    if explicit_id.is_some() {
-        s.capture = CaptureState::Manual;
-    }
-    s.status = SessionStatus::Running;
-    s.last_seen_at = WorkState::now_iso();
-    save_work(&mut state)?;
+    let (new_status, _, screen_preview) = evaluate_readiness(&herdr, &hc_info, false);
+    let capture_override = if explicit_id.is_some() {
+        Some(CaptureState::Manual)
+    } else if session.native_session_id.is_none() {
+        Some(CaptureState::Auto)
+    } else {
+        None
+    };
+
+    let _ = mutate_work(&slug, |s| {
+        s.herdr_space_id = Some(space_id.clone());
+        s.herdr_space_name = Some(slug.clone());
+        if let Some(sess) = s.sessions.iter_mut().find(|x| x.key == key) {
+            sess.hc_terminal_id = Some(hc_info.id.clone());
+            sess.native_session_id = Some(native_id.clone());
+            if let Some(cap) = capture_override.clone() {
+                sess.capture = cap;
+            }
+            sess.status = new_status.clone();
+            sess.last_seen_at = WorkState::now_iso();
+        }
+        Ok((true, ()))
+    })?;
 
     Ok(serde_json::to_string_pretty(&json!({
         "action": "resumed",
         "slug": slug,
         "key": key,
         "cwd": cwd.display().to_string(),
+        "herdr_space_id": space_id,
         "hc_terminal_id": hc_info.id,
         "native_session_id": native_id,
+        "status": new_status,
+        "screen_preview": screen_preview,
     }))
     .unwrap())
 }

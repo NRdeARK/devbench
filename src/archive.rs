@@ -2,7 +2,7 @@ use crate::config::Config;
 use crate::herdr::{current_hc_terminal_id, HerdrClient};
 use crate::paths::{expand_tilde, move_dir_safe};
 use crate::state::{
-    load_work, save_work, write_frozen_snapshot, ArchivePhase, RepoStatus, SessionStatus,
+    load_work, mutate_work, write_frozen_snapshot, ArchivePhase, RepoStatus, SessionStatus,
     WorkStatus,
 };
 use crate::worktree::{collect_git_summary, detach_worktree, inspect_worktree, snapshot_wip};
@@ -21,49 +21,56 @@ pub struct ArchiveReport {
 }
 
 /// Safely archive a completed work following D6 + UC-05:
-/// 1. Self-archive guard
-/// 2. Dirty/untracked/submodule guard (block unless `--snapshot-wip`), soft-warn unpushed & ignored
-/// 3. Phase 1 (`herdr_closed`): close 1:1 Herdr space + kill/rm ONLY recorded hc terminals FIRST
-/// 4. Phase 2 (`worktrees_detached`): capture git summary + final SHA, `git worktree remove` (no --force) + `prune`
-/// 5. Phase 3 (`snapshot_written`): write frozen `state.snapshot.json` + `git_summary.md`
-/// 6. Phase 4 (`moved`): move folder to `<archive_root>/<slug>` (timestamp suffix on collision)
+/// 1. Self-archive guard (with `--allow-self-archive`, defers closing caller's own space/terminal to last)
+/// 2. Inspect ALL worktrees BEFORE mutating anything (so a submodule blocker never causes partial WIP commits)
+/// 3. Phase 1 (`herdr_closed`): close 1:1 Herdr space (`{id, confirmed: true}`) + kill/wait/rm recorded terminals
+/// 4. Phase 2 (`worktrees_detached`): save each repo's `final_head_sha` + `Removed` immediately after detach
+/// 5. Phase 3 (`snapshot_written`): write `git_summary.md` and frozen `state.snapshot.json` (fails if work_dir missing)
+/// 6. Phase 4 (`moved`): staged cross-volume-safe move into collision-free `<archive_root>/<slug>`
 pub fn archive_work(
     cfg: &Config,
     slug: &str,
     do_snapshot_wip: bool,
     allow_self_archive: bool,
 ) -> Result<ArchiveReport, String> {
-    let mut state = load_work(slug)?;
-    if state.status == WorkStatus::Archived && state.archive_phase == Some(ArchivePhase::Moved) {
+    let state_initial = load_work(slug)?;
+    if state_initial.status == WorkStatus::Archived
+        && state_initial.archive_phase == Some(ArchivePhase::Moved)
+    {
         return Err(format!(
             "Work '{slug}' is already archived at {}",
-            state.archive_path.as_deref().unwrap_or("(unknown)")
+            state_initial.archive_path.as_deref().unwrap_or("(unknown)")
         ));
     }
 
-    // Edge case: invoked from inside the work's own Herdr workspace
-    if !allow_self_archive {
-        if let Some(caller_hc) = current_hc_terminal_id() {
-            let inside_self = state
-                .sessions
-                .iter()
-                .any(|s| s.hc_terminal_id.as_deref() == Some(caller_hc.as_str()));
-            if inside_self {
-                return Err(format!(
-                    "Refusing to close workspace while invoked from inside this work's own terminal ({caller_hc}). \
-                     Run `devbench archive {slug}` from the Dispatcher outside this workspace, or pass --allow-self-archive."
-                ));
-            }
-        }
+    let caller_hc = current_hc_terminal_id();
+    let invoked_from_self = caller_hc.as_deref().is_some_and(|cid| {
+        state_initial
+            .sessions
+            .iter()
+            .any(|s| s.hc_terminal_id.as_deref() == Some(cid))
+            || state_initial.herdr_space_initial_terminal.as_deref() == Some(cid)
+    });
+
+    if invoked_from_self && !allow_self_archive {
+        return Err(format!(
+            "Refusing to close workspace while invoked from inside this work's own terminal ({}). \
+             Run `devbench archive {slug}` from the Dispatcher outside this workspace, or pass --allow-self-archive.",
+            caller_hc.as_deref().unwrap_or("unknown")
+        ));
     }
 
+    let effective_snapshot_wip = do_snapshot_wip || cfg.archive.snapshot_wip;
+    let defer_self_close = invoked_from_self && allow_self_archive;
     let mut warnings = Vec::new();
-    let phase_rank = archive_phase_rank(&state.archive_phase);
+    let phase_rank = archive_phase_rank(&state_initial.archive_phase);
 
-    // Step 2: Inspect dirty / untracked / unpushed / ignored before closing Herdr or mutating anything
+    // Step 2: Inspect ALL repos BEFORE committing WIP or closing Herdr
     if phase_rank < 2 {
         let mut dirty_blockers = Vec::new();
-        for repo in &state.repos {
+        let mut repos_needing_wip = Vec::new();
+
+        for repo in &state_initial.repos {
             if repo.status == RepoStatus::Removed {
                 continue;
             }
@@ -75,12 +82,8 @@ pub fn archive_work(
                 ));
             }
             if !info.dirty_paths.is_empty() {
-                if do_snapshot_wip {
-                    let sha = snapshot_wip(repo, slug)?;
-                    warnings.push(format!(
-                        "{}: committed WIP snapshot {} on branch {}",
-                        repo.alias, sha, repo.branch
-                    ));
+                if effective_snapshot_wip {
+                    repos_needing_wip.push(repo.clone());
                 } else {
                     dirty_blockers.push(format!(
                         "{} ({}): {}",
@@ -108,79 +111,162 @@ pub fn archive_work(
 
         if !dirty_blockers.is_empty() {
             return Err(format!(
-                "Archive blocked due to dirty/untracked worktrees (Herdr left open):\n- {}\nRe-run with --snapshot-wip to commit WIP onto task branches, or clean/commit manually.",
+                "Archive blocked due to dirty/untracked worktrees or submodules (Herdr left open):\n- {}\nRe-run with --snapshot-wip to commit WIP onto task branches, or clean/commit manually.",
                 dirty_blockers.join("\n- ")
+            ));
+        }
+
+        // Only commit WIP snapshots after ALL blockers passed across ALL repos
+        for repo in repos_needing_wip {
+            let sha = snapshot_wip(&repo, slug)?;
+            warnings.push(format!(
+                "{}: committed WIP snapshot {} on branch {}",
+                repo.alias, sha, repo.branch
             ));
         }
     }
 
-    state.status = WorkStatus::Archiving;
-    save_work(&mut state)?;
+    let (mut state, _) = mutate_work(slug, |s| {
+        s.status = WorkStatus::Archiving;
+        Ok((true, ()))
+    })?;
 
-    // Phase 1: Close 1:1 Herdr workspace & kill ONLY recorded terminals FIRST (releases Windows file locks)
+    let herdr = HerdrClient::from_config(&cfg.herdr);
+
+    // Phase 1: Close 1:1 Herdr workspace & kill recorded terminals FIRST (unless deferring self-archive)
     if phase_rank < 1 {
-        let herdr = HerdrClient::from_config(&cfg.herdr);
-        if let Some(space_id) = state.herdr_space_id.clone() {
-            if let Err(e) = herdr.space_close(&space_id) {
-                warnings.push(format!(
-                    "Herdr space '{space_id}' already closed or unreachable (tolerated): {e}"
-                ));
+        if !defer_self_close {
+            if let Some(space_id) = state.herdr_space_id.clone() {
+                if let Err(e) = herdr.space_close(&space_id) {
+                    warnings.push(format!(
+                        "Herdr space '{space_id}' already closed or unreachable (tolerated): {e}"
+                    ));
+                }
             }
-        }
-        for s in &mut state.sessions {
-            if let Some(tid) = s.hc_terminal_id.as_deref() {
-                herdr.hc_kill_and_rm(tid);
+            if let Some(init_tid) = state.herdr_space_initial_terminal.clone() {
+                let _ = herdr.hc_kill_and_rm(&init_tid);
             }
-            s.status = SessionStatus::Archived;
+            let session_tids: Vec<String> = state
+                .sessions
+                .iter()
+                .filter_map(|s| s.hc_terminal_id.clone())
+                .collect();
+            for tid in session_tids {
+                if let Err(e) = herdr.hc_kill_and_rm(&tid) {
+                    warnings.push(format!("hc cleanup for '{tid}' warned: {e}"));
+                }
+            }
+            let (updated, _) = mutate_work(slug, |s| {
+                for sess in &mut s.sessions {
+                    sess.status = SessionStatus::Archived;
+                }
+                s.herdr_space_id = None;
+                s.herdr_space_initial_terminal = None;
+                s.archive_phase = Some(ArchivePhase::HerdrClosed);
+                Ok((true, ()))
+            })?;
+            state = updated;
+        } else {
+            // Self-archive mode: kill only OTHER sessions now; keep caller's space/terminal until last
+            let caller_id = caller_hc.as_deref();
+            for sess in &state.sessions {
+                if let Some(tid) = sess.hc_terminal_id.as_deref() {
+                    if Some(tid) != caller_id {
+                        let _ = herdr.hc_kill_and_rm(tid);
+                    }
+                }
+            }
+            let (updated, _) = mutate_work(slug, |s| {
+                for sess in &mut s.sessions {
+                    if sess.hc_terminal_id.as_deref() != caller_id {
+                        sess.status = SessionStatus::Archived;
+                    }
+                }
+                s.archive_phase = Some(ArchivePhase::HerdrClosed);
+                Ok((true, ()))
+            })?;
+            state = updated;
         }
-        state.herdr_space_id = None;
-        state.archive_phase = Some(ArchivePhase::HerdrClosed);
-        save_work(&mut state)?;
     }
 
-    // Phase 2: Collect git summary + detach clean worktrees (NO --force) + prune
+    // Phase 2: Detach each clean worktree and checkpoint IMMEDIATELY per repo so partial failure retains SHAs
     let work_dir = PathBuf::from(&state.work_dir);
     if phase_rank < 2 {
-        let mut summary_doc = format!("# Archive Git Summary — {slug}\n\n");
-        for repo in &mut state.repos {
+        let repo_count = state.repos.len();
+        for idx in 0..repo_count {
+            let repo = state.repos[idx].clone();
             if repo.status == RepoStatus::Removed {
                 continue;
             }
-            let (head_sha, md) = collect_git_summary(repo);
-            summary_doc.push_str(&md);
-            summary_doc.push('\n');
-            repo.final_head_sha = head_sha;
-            detach_worktree(repo).map_err(|e| {
+            let (head_sha, _) = collect_git_summary(&repo);
+            detach_worktree(&repo).map_err(|e| {
                 format!(
-                    "Failed to detach worktree '{}' (state checkpointed at herdr_closed; rerun `devbench archive {slug}` after releasing any Windows lock): {e}",
+                    "Failed to detach worktree '{}' (rerun `devbench archive {slug}` after releasing any Windows lock): {e}",
                     repo.alias
                 )
             })?;
-            repo.status = RepoStatus::Removed;
+            let (updated, _) = mutate_work(slug, |s| {
+                if let Some(r) = s.repos.get_mut(idx) {
+                    r.final_head_sha = head_sha.clone();
+                    r.status = RepoStatus::Removed;
+                }
+                Ok((true, ()))
+            })?;
+            state = updated;
         }
-        if work_dir.is_dir() {
-            let _ = fs::write(work_dir.join("git_summary.md"), summary_doc);
+
+        // Write complete git_summary.md covering ALL repos (using preserved branches in source repos)
+        if !work_dir.is_dir() {
+            return Err(format!(
+                "Active work directory is missing before snapshot: {}",
+                work_dir.display()
+            ));
         }
-        state.archive_phase = Some(ArchivePhase::WorktreesDetached);
-        save_work(&mut state)?;
+        let mut summary_doc = format!("# Archive Git Summary — {slug}\n\n");
+        for repo in &state.repos {
+            let (_, md) = collect_git_summary(repo);
+            summary_doc.push_str(&md);
+            summary_doc.push('\n');
+        }
+        fs::write(work_dir.join("git_summary.md"), summary_doc)
+            .map_err(|e| format!("Failed to write git_summary.md: {e}"))?;
+
+        let (updated, _) = mutate_work(slug, |s| {
+            s.archive_phase = Some(ArchivePhase::WorktreesDetached);
+            Ok((true, ()))
+        })?;
+        state = updated;
     }
 
-    // Compute collision-safe archive destination
+    // Compute collision-safe archive destination (reusing recorded archive_path if resuming Phase 4)
     let archive_root = expand_tilde(&cfg.archive_root)?;
-    let target_dir = collision_safe_archive_dir(&archive_root, slug);
+    let target_dir = match &state.archive_path {
+        Some(existing) if phase_rank >= 3 => PathBuf::from(existing),
+        _ => collision_safe_archive_dir(&archive_root, slug),
+    };
 
     // Phase 3: Write frozen snapshot into work folder
     if phase_rank < 3 {
-        state.status = WorkStatus::Archived;
-        state.archive_path = Some(target_dir.to_string_lossy().to_string());
-        state.archive_phase = Some(ArchivePhase::SnapshotWritten);
-        if work_dir.is_dir() {
-            write_frozen_snapshot(&work_dir, &state)?;
+        if !work_dir.is_dir() {
+            return Err(format!(
+                "Cannot write frozen snapshot: work directory missing at {}",
+                work_dir.display()
+            ));
         }
-        save_work(&mut state)?;
+        let (updated, _) = mutate_work(slug, |s| {
+            s.status = WorkStatus::Archived;
+            s.archive_path = Some(target_dir.to_string_lossy().to_string());
+            s.archive_phase = Some(ArchivePhase::SnapshotWritten);
+            for sess in &mut s.sessions {
+                sess.status = SessionStatus::Archived;
+            }
+            Ok((true, ()))
+        })?;
+        state = updated;
+        write_frozen_snapshot(&work_dir, &state)?;
     }
 
-    // Phase 4: Move folder to archive_root (safe across drives)
+    // Phase 4: Move folder to archive_root (safe across drives; never claim Moved if folder vanished)
     let final_dir = PathBuf::from(
         state
             .archive_path
@@ -190,10 +276,31 @@ pub fn archive_work(
     if phase_rank < 4 {
         if work_dir.is_dir() {
             move_dir_safe(&work_dir, &final_dir)?;
+        } else if !final_dir.is_dir() {
+            return Err(format!(
+                "Cannot complete archive move: neither source {} nor archive destination {} exists",
+                work_dir.display(),
+                final_dir.display()
+            ));
         }
-        state.status = WorkStatus::Archived;
-        state.archive_phase = Some(ArchivePhase::Moved);
-        save_work(&mut state)?;
+        let (updated, _) = mutate_work(slug, |s| {
+            s.status = WorkStatus::Archived;
+            s.archive_phase = Some(ArchivePhase::Moved);
+            s.herdr_space_id = None;
+            s.herdr_space_initial_terminal = None;
+            Ok((true, ()))
+        })?;
+        state = updated;
+    }
+
+    // Deferred self-archive cleanup: close caller's own workspace LAST after state & archive are safely persisted
+    if defer_self_close {
+        if let Some(space_id) = state_initial.herdr_space_id.as_deref() {
+            let _ = herdr.space_close(space_id);
+        }
+        if let Some(cid) = caller_hc.as_deref() {
+            let _ = herdr.hc_kill_and_rm(cid);
+        }
     }
 
     let kept_branches = state
@@ -240,5 +347,15 @@ fn collision_safe_archive_dir(archive_root: &Path, slug: &str) -> PathBuf {
         return base;
     }
     let ts = Utc::now().format("%Y%m%d-%H%M%S");
-    archive_root.join(format!("{slug}-{ts}"))
+    let candidate = archive_root.join(format!("{slug}-{ts}"));
+    if !candidate.exists() {
+        return candidate;
+    }
+    for n in 2..=999 {
+        let indexed = archive_root.join(format!("{slug}-{ts}-{n}"));
+        if !indexed.exists() {
+            return indexed;
+        }
+    }
+    archive_root.join(format!("{slug}-{ts}-{}", uuid::Uuid::new_v4().simple()))
 }

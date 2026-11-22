@@ -5,6 +5,7 @@ pub mod generic;
 
 use crate::config::AgentConfig;
 use crate::state::CaptureState;
+use std::collections::HashSet;
 use std::path::Path;
 use std::time::SystemTime;
 
@@ -22,6 +23,7 @@ pub trait HarnessAdapter {
         _cwd: &Path,
         _launched_at: SystemTime,
         plan: &LaunchPlan,
+        _exclude_ids: &HashSet<String>,
     ) -> (Option<String>, CaptureState) {
         (plan.preassigned_session_id.clone(), plan.capture.clone())
     }

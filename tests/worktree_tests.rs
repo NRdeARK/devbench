@@ -1,6 +1,6 @@
 use devbench::archive::archive_work;
 use devbench::config::{AgentConfig, ArchiveConfig, CaptureMode, Config, HerdrConfig, RepoConfig};
-use devbench::state::{save_work, WorkStatus};
+use devbench::state::{load_work, save_work, ArchivePhase, RepoStatus, WorkStatus};
 use devbench::worktree::{run_git, setup_workspace};
 use std::collections::BTreeMap;
 use std::fs;
@@ -12,8 +12,10 @@ fn init_sample_repo(dir: &Path) {
     run_git(dir, &["init", "-b", "main"]).unwrap();
     run_git(dir, &["config", "user.name", "Test User"]).unwrap();
     run_git(dir, &["config", "user.email", "test@example.com"]).unwrap();
+    run_git(dir, &["config", "commit.gpgsign", "false"]).unwrap();
+    fs::write(dir.join(".gitignore"), ".env\n").unwrap();
     fs::write(dir.join("README.md"), "# sample\n").unwrap();
-    run_git(dir, &["add", "README.md"]).unwrap();
+    run_git(dir, &["add", ".gitignore", "README.md"]).unwrap();
     run_git(dir, &["commit", "-m", "initial"]).unwrap();
 }
 
@@ -45,8 +47,10 @@ fn test_config(root: &Path, repos: BTreeMap<String, RepoConfig>) -> Config {
 }
 
 #[test]
-fn multi_repo_setup_dirty_block_wip_snapshot_and_clean_archive() {
+fn preflight_guards_dirty_block_submodule_no_partial_wip_and_archive_collision() {
     let tmp = TempDir::new().unwrap();
+    std::env::set_var("DEVBENCH_STATE_DIR", tmp.path().join("state"));
+
     let repo_a = tmp.path().join("repos").join("api");
     let repo_b = tmp.path().join("repos").join("web");
     init_sample_repo(&repo_a);
@@ -67,50 +71,93 @@ fn multi_repo_setup_dirty_block_wip_snapshot_and_clean_archive() {
             base_ref: "main".to_string(),
         },
     );
+    repos.insert(
+        "api-dup".to_string(),
+        RepoConfig {
+            path: repo_a.display().to_string(),
+            base_ref: "main".to_string(),
+        },
+    );
+    repos.insert(
+        "../evil".to_string(),
+        RepoConfig {
+            path: repo_a.display().to_string(),
+            base_ref: "main".to_string(),
+        },
+    );
     let cfg = test_config(tmp.path(), repos);
 
-    // Point central state dir to isolated temp dir
-    std::env::set_var("DEVBENCH_STATE_DIR", tmp.path().join("state"));
+    // 1. Unknown alias fails preflight with zero folder created
+    assert!(setup_workspace(&cfg, "bad-unknown", None, &["api".into(), "nope".into()]).is_err());
+    assert!(!tmp.path().join("work").join("bad-unknown").exists());
 
-    // Preflight fails cleanly on unknown alias without creating anything
-    let bad = setup_workspace(
-        &cfg,
-        "fail-preflight",
-        None,
-        &["api".to_string(), "missing".to_string()],
-    );
-    assert!(bad.is_err());
-    assert!(!tmp.path().join("work").join("fail-preflight").exists());
+    // 2. Traversal alias rejected
+    assert!(setup_workspace(&cfg, "bad-alias", None, &["../evil".into()]).is_err());
 
-    // Valid multi-repo setup (with duplicate alias deduplication)
+    // 3. Two aliases pointing to same Git repo rejected in preflight
+    assert!(setup_workspace(&cfg, "bad-same", None, &["api".into(), "api-dup".into()]).is_err());
+    assert!(!tmp.path().join("work").join("bad-same").exists());
+
+    // 4. Dirty source repo still succeeds cleanly (branches from base_ref)
+    fs::write(repo_a.join("local-dirty.txt"), "host edit\n").unwrap();
     let mut state = setup_workspace(
         &cfg,
         "auth-refresh",
         Some("Auth refresh".to_string()),
-        &["api".to_string(), "web".to_string(), "api".to_string()],
+        &["api".into(), "web".into(), "api".into()],
     )
     .unwrap();
     assert_eq!(state.repos.len(), 2);
     assert_eq!(state.status, WorkStatus::Active);
     save_work(&mut state).unwrap();
 
-    // Dirty worktree blocks archive cleanly
-    let api_wt = tmp.path().join("work").join("auth-refresh").join("api");
-    fs::write(api_wt.join("draft.txt"), "uncommitted\n").unwrap();
-    let blocked = archive_work(&cfg, "auth-refresh", false, true);
-    assert!(blocked.is_err());
-    assert!(api_wt.exists());
+    // 5. Re-running setup for same slug rejected (state exists)
+    assert!(setup_workspace(&cfg, "auth-refresh", None, &["api".into()]).is_err());
 
-    // --snapshot-wip commits WIP on task branch, detaches clean worktrees, preserves branches, and archives
+    // 6. Submodule in repo B blocks BEFORE committing WIP in dirty repo A!
+    let api_wt = tmp.path().join("work").join("auth-refresh").join("api");
+    let web_wt = tmp.path().join("work").join("auth-refresh").join("web");
+    fs::write(api_wt.join("draft.txt"), "uncommitted\n").unwrap();
+    fs::write(api_wt.join(".env"), "SECRET=demo\n").unwrap();
+    fs::write(web_wt.join(".gitmodules"), "[submodule \"x\"]\n").unwrap();
+
+    let head_before = run_git(&api_wt, &["rev-parse", "HEAD"]).unwrap();
+    let sub_blocked = archive_work(&cfg, "auth-refresh", true, true);
+    assert!(sub_blocked.is_err());
+    // Verify repo A did NOT receive a premature WIP commit!
+    assert_eq!(run_git(&api_wt, &["rev-parse", "HEAD"]).unwrap(), head_before);
+
+    // Clean up fake .gitmodules; dirty tree blocks when snapshot_wip = false
+    fs::remove_file(web_wt.join(".gitmodules")).unwrap();
+    assert!(archive_work(&cfg, "auth-refresh", false, true).is_err());
+
+    // Pre-create archive collision folder to test timestamped archive suffix
+    fs::create_dir_all(tmp.path().join("archive").join("auth-refresh")).unwrap();
+
+    // Now archive with --snapshot-wip -> commits WIP, warns on .env ignored file, moves to timestamped folder
     let report = archive_work(&cfg, "auth-refresh", true, true).unwrap();
     assert!(!tmp.path().join("work").join("auth-refresh").exists());
     assert!(Path::new(&report.archive_path).is_dir());
+    assert_ne!(
+        Path::new(&report.archive_path),
+        tmp.path().join("archive").join("auth-refresh")
+    );
+    assert!(report.warnings.iter().any(|w| w.contains(".env")));
     assert!(Path::new(&report.snapshot_path).is_file());
-    assert!(Path::new(&report.archive_path).join("git_summary.md").is_file());
+    let summary = fs::read_to_string(Path::new(&report.archive_path).join("git_summary.md")).unwrap();
+    assert!(summary.contains("devbench/auth-refresh"));
 
-    // Source repos remain clean and still have the preserved task branches
+    // Source repos clean and preserved branches match HEAD
     let branches_a = run_git(&repo_a, &["branch", "--list", "devbench/auth-refresh"]).unwrap();
     assert!(branches_a.contains("devbench/auth-refresh"));
-    let wt_list_a = run_git(&repo_a, &["worktree", "list"]).unwrap();
-    assert!(!wt_list_a.contains("auth-refresh"));
+    assert!(!run_git(&repo_a, &["worktree", "list"]).unwrap().contains("auth-refresh"));
+
+    // Rerun after Moved is rejected cleanly
+    assert!(archive_work(&cfg, "auth-refresh", false, true).is_err());
+
+    // Verify central state reflects Moved + Removed repos + final SHAs
+    let final_state = load_work("auth-refresh").unwrap();
+    assert_eq!(final_state.status, WorkStatus::Archived);
+    assert_eq!(final_state.archive_phase, Some(ArchivePhase::Moved));
+    assert!(final_state.repos.iter().all(|r| r.status == RepoStatus::Removed && r.final_head_sha.is_some()));
 }

@@ -10,6 +10,15 @@ repository = "https://github.com/NRdeARK/devbench"
 name = "devbench"
 path = "src/main.rs"
 
+[[bin]]
+name = "fake_herdr"
+path = "src/bin/fake_herdr.rs"
+required-features = ["test-shims"]
+
+[features]
+default = []
+test-shims = []
+
 [dependencies]
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 clap = { version = "4", features = ["derive"] }

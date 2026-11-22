@@ -116,6 +116,8 @@ pub struct WorkState {
     pub herdr_space_id: Option<String>,
     #[serde(default)]
     pub herdr_space_name: Option<String>,
+    #[serde(default)]
+    pub herdr_space_initial_terminal: Option<String>,
     pub work_dir: String,
     #[serde(default)]
     pub archive_path: Option<String>,
@@ -149,6 +151,7 @@ impl WorkState {
             host_id: Self::current_host_id(),
             herdr_space_id: None,
             herdr_space_name: None,
+            herdr_space_initial_terminal: None,
             work_dir,
             archive_path: None,
             repos: Vec::new(),
@@ -158,8 +161,13 @@ impl WorkState {
         }
     }
 
-    pub fn upsert_session(&mut self, session: WorkSession) {
+    /// Upsert a session while preserving an existing `native_session_id` if the update has `None`.
+    pub fn upsert_session(&mut self, mut session: WorkSession) {
         if let Some(existing) = self.sessions.iter_mut().find(|s| s.key == session.key) {
+            if session.native_session_id.is_none() && existing.native_session_id.is_some() {
+                session.native_session_id = existing.native_session_id.clone();
+                session.capture = existing.capture.clone();
+            }
             *existing = session;
         } else {
             self.sessions.push(session);
@@ -183,39 +191,68 @@ pub fn work_state_path(slug: &str) -> Result<PathBuf, String> {
     Ok(works_state_dir()?.join(format!("{slug}.json")))
 }
 
-/// Load one work state by slug.
-pub fn load_work(slug: &str) -> Result<WorkState, String> {
-    let path = work_state_path(slug)?;
+fn load_work_unlocked(path: &Path, slug: &str) -> Result<WorkState, String> {
     if !path.is_file() {
         return Err(format!(
             "Work '{slug}' not found in central state ({})",
             path.display()
         ));
     }
-    let raw = fs::read_to_string(&path)
+    let raw = fs::read_to_string(path)
         .map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
     serde_json::from_str(&raw).map_err(|e| format!("Corrupt state {}: {e}", path.display()))
+}
+
+fn save_work_unlocked(path: &Path, state: &mut WorkState) -> Result<(), String> {
+    state.updated_at = WorkState::now_iso();
+    let bytes = serde_json::to_vec_pretty(state)
+        .map_err(|e| format!("Failed to serialize work state: {e}"))?;
+    atomic_write(path, &bytes)
+}
+
+/// Load one work state by slug (acquires per-work lock for consistent snapshot).
+pub fn load_work(slug: &str) -> Result<WorkState, String> {
+    let dir = works_state_dir()?;
+    let _lock = WorkLock::acquire(&dir, slug)?;
+    let path = dir.join(format!("{slug}.json"));
+    load_work_unlocked(&path, slug)
 }
 
 /// Save one work state atomically under its per-work file lock.
 pub fn save_work(state: &mut WorkState) -> Result<PathBuf, String> {
     let dir = works_state_dir()?;
     let _lock = WorkLock::acquire(&dir, &state.slug)?;
-    state.updated_at = WorkState::now_iso();
     let path = dir.join(format!("{}.json", state.slug));
-    let bytes = serde_json::to_vec_pretty(state)
-        .map_err(|e| format!("Failed to serialize work state: {e}"))?;
-    atomic_write(&path, &bytes)?;
+    save_work_unlocked(&path, state)?;
     Ok(path)
 }
 
-/// List all works tracked in the central state directory, sorted by slug.
-pub fn list_works() -> Result<Vec<WorkState>, String> {
+/// Execute a locked read-modify-write transaction on a single work's central state file.
+/// Prevents lost updates when concurrent `spawn`, `bind`, `status`, or `archive` commands run.
+pub fn mutate_work<F, T>(slug: &str, f: F) -> Result<(WorkState, T), String>
+where
+    F: FnOnce(&mut WorkState) -> Result<(bool, T), String>,
+{
+    let dir = works_state_dir()?;
+    let _lock = WorkLock::acquire(&dir, slug)?;
+    let path = dir.join(format!("{slug}.json"));
+    let mut state = load_work_unlocked(&path, slug)?;
+    let (dirty, val) = f(&mut state)?;
+    if dirty {
+        save_work_unlocked(&path, &mut state)?;
+    }
+    Ok((state, val))
+}
+
+/// List all valid works tracked in the central state directory, sorted by slug.
+/// Corrupt JSON files are collected as warnings rather than aborting inspection.
+pub fn list_works_with_warnings() -> Result<(Vec<WorkState>, Vec<String>), String> {
     let dir = works_state_dir()?;
     if !dir.is_dir() {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), Vec::new()));
     }
     let mut works = Vec::new();
+    let mut warnings = Vec::new();
     for entry in fs::read_dir(&dir).map_err(|e| format!("Failed to read {}: {e}", dir.display()))? {
         let entry = entry.map_err(|e| format!("Failed to read state entry: {e}"))?;
         let path = entry.path();
@@ -227,13 +264,24 @@ pub fn list_works() -> Result<Vec<WorkState>, String> {
                 continue;
             }
         }
-        let raw = fs::read_to_string(&path)
-            .map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
-        let state: WorkState = serde_json::from_str(&raw)
-            .map_err(|e| format!("Invalid state {}: {e}", path.display()))?;
-        works.push(state);
+        match fs::read_to_string(&path)
+            .map_err(|e| format!("read error: {e}"))
+            .and_then(|raw| {
+                serde_json::from_str::<WorkState>(&raw).map_err(|e| format!("parse error: {e}"))
+            }) {
+            Ok(state) => works.push(state),
+            Err(reason) => warnings.push(format!(
+                "Skipping corrupt state file {}: {reason}",
+                path.display()
+            )),
+        }
     }
     works.sort_by(|a, b| a.slug.cmp(&b.slug));
+    Ok((works, warnings))
+}
+
+pub fn list_works() -> Result<Vec<WorkState>, String> {
+    let (works, _) = list_works_with_warnings()?;
     Ok(works)
 }
 

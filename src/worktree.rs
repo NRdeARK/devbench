@@ -1,6 +1,8 @@
 use crate::config::Config;
-use crate::paths::{check_path_length, expand_tilde, sanitize_slug};
-use crate::state::{RepoStatus, WorkRepo, WorkState, WorkStatus};
+use crate::paths::{
+    check_path_length, expand_tilde, normalize_for_compare, sanitize_slug, validate_repo_alias,
+};
+use crate::state::{work_state_path, RepoStatus, WorkRepo, WorkState, WorkStatus};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -18,6 +20,9 @@ pub struct WorktreeInspection {
 
 pub fn run_git(repo_dir: &Path, args: &[&str]) -> Result<String, String> {
     let output = Command::new("git")
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_INDEX_FILE")
         .arg("-C")
         .arg(repo_dir)
         .args(args)
@@ -38,8 +43,8 @@ pub fn run_git(repo_dir: &Path, args: &[&str]) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
-/// Preflight all target repos and create `<work_root>/<slug>/<repo>` worktrees atomically.
-/// On mid-setup failure, rolls back every worktree and branch created so far.
+/// Preflight all target repos and create `<work_root>/<slug>/<repo>` worktrees cleanly.
+/// Uses exclusive `create_dir` (no TOCTOU race) and rolls back created worktrees & branches on error.
 pub fn setup_workspace(
     cfg: &Config,
     raw_slug: &str,
@@ -51,12 +56,21 @@ pub fn setup_workspace(
         return Err("At least one repo alias is required (--repos api,web)".to_string());
     }
 
+    // Prevent overwriting an existing active or archived central state record
+    let state_path = work_state_path(&slug)?;
+    if state_path.exists() {
+        return Err(format!(
+            "Work '{slug}' already exists in central state ({}). Choose a distinct slug.",
+            state_path.display()
+        ));
+    }
+
     // Deduplicate aliases preserving order
-    let mut seen = HashSet::new();
+    let mut seen_aliases = HashSet::new();
     let mut aliases = Vec::new();
     for a in raw_aliases {
         let t = a.trim();
-        if !t.is_empty() && seen.insert(t.to_string()) {
+        if !t.is_empty() && seen_aliases.insert(t.to_string()) {
             aliases.push(t.to_string());
         }
     }
@@ -86,8 +100,10 @@ pub fn setup_workspace(
         base_sha: String,
     }
 
+    let mut seen_canonical_repos = HashSet::new();
     let mut planned = Vec::with_capacity(aliases.len());
     for alias in &aliases {
+        validate_repo_alias(alias)?;
         let repo_cfg = cfg.repos.get(alias).ok_or_else(|| {
             format!("Unknown repo alias '{alias}'. Add it to config.repos or run `devbench config check`.")
         })?;
@@ -95,6 +111,16 @@ pub fn setup_workspace(
         if !source_path.is_dir() || !source_path.join(".git").exists() {
             return Err(format!(
                 "Repo '{alias}' is missing or not a Git repo: {}",
+                source_path.display()
+            ));
+        }
+
+        // Guard against two different aliases pointing to the same physical repository
+        let canon = fs::canonicalize(&source_path).unwrap_or_else(|_| source_path.clone());
+        let canon_key = normalize_for_compare(&canon);
+        if !seen_canonical_repos.insert(canon_key) {
+            return Err(format!(
+                "Repo alias '{alias}' points to the same Git repository as another alias in this work: {}",
                 source_path.display()
             ));
         }
@@ -112,7 +138,7 @@ pub fn setup_workspace(
             )
         })?;
 
-        // Check branch does not already exist (avoids colliding with existing or checked-out branch)
+        // Check branch does not already exist
         let ref_check = format!("refs/heads/{branch_name}");
         if run_git(&source_path, &["show-ref", "--verify", "--quiet", &ref_check]).is_ok() {
             return Err(format!(
@@ -130,9 +156,20 @@ pub fn setup_workspace(
         });
     }
 
-    // Phase 2: Create central folder + notes dir + worktrees, rolling back on any error
-    fs::create_dir_all(work_dir.join("notes"))
-        .map_err(|e| format!("Failed to create {}: {e}", work_dir.display()))?;
+    // Phase 2: Exclusively create central folder (eliminates TOCTOU race between two concurrent `new` calls)
+    fs::create_dir_all(&work_root)
+        .map_err(|e| format!("Failed to create work_root {}: {e}", work_root.display()))?;
+    fs::create_dir(&work_dir).map_err(|e| {
+        format!(
+            "Failed to exclusively create work folder {} (already exists or permission denied): {e}",
+            work_dir.display()
+        )
+    })?;
+
+    if let Err(e) = fs::create_dir_all(work_dir.join("notes")) {
+        let _ = fs::remove_dir_all(&work_dir);
+        return Err(format!("Failed to create notes dir: {e}"));
+    }
 
     let mut created: Vec<WorkRepo> = Vec::new();
     for item in planned {
@@ -163,19 +200,35 @@ pub fn setup_workspace(
                 });
             }
             Err(err) => {
+                let mut rollback_errors = Vec::new();
+                // Clean up any partial branch/worktree left by the failing repo itself
+                let _ = run_git(&item.source_path, &["worktree", "remove", "--force", &wt_str]);
+                let _ = run_git(&item.source_path, &["worktree", "prune"]);
+                let _ = run_git(&item.source_path, &["branch", "-D", &branch_name]);
+
                 // Roll back previously created worktrees and branches cleanly
                 for done in created.iter().rev() {
                     let src = Path::new(&done.source_path);
-                    let _ = run_git(src, &["worktree", "remove", "--force", &done.worktree_path]);
+                    if let Err(re) = run_git(src, &["worktree", "remove", "--force", &done.worktree_path]) {
+                        rollback_errors.push(format!("{}: {re}", done.alias));
+                    }
                     let _ = run_git(src, &["worktree", "prune"]);
-                    let _ = run_git(src, &["branch", "-D", &done.branch]);
+                    if let Err(be) = run_git(src, &["branch", "-D", &done.branch]) {
+                        rollback_errors.push(format!("{} branch cleanup: {be}", done.alias));
+                    }
                 }
-                let _ = fs::remove_dir_all(&work_dir);
+                if let Err(rm_err) = fs::remove_dir_all(&work_dir) {
+                    rollback_errors.push(format!("remove {}: {rm_err}", work_dir.display()));
+                }
+
+                let rb_note = if rollback_errors.is_empty() {
+                    format!("rolled back {} earlier repo(s) cleanly", created.len())
+                } else {
+                    format!("rollback had warnings: {}", rollback_errors.join("; "))
+                };
                 return Err(format!(
-                    "Failed while creating worktree for '{}' (rolled back {} earlier repo(s)): {}",
-                    item.alias,
-                    created.len(),
-                    err
+                    "Failed while creating worktree for '{}' ({rb_note}): {err}",
+                    item.alias
                 ));
             }
         }
@@ -219,7 +272,6 @@ pub fn inspect_worktree(repo: &WorkRepo) -> Result<WorktreeInspection, String> {
         .map(|l| l.trim_start_matches("!! ").to_string())
         .collect();
 
-    // Count commits not pushed to upstream (if an upstream exists; otherwise check against base_sha)
     let unpushed_commits = match run_git(&wt, &["rev-list", "--count", "@{u}..HEAD"]) {
         Ok(n) => n.parse::<usize>().unwrap_or(0),
         Err(_) => {
@@ -253,15 +305,32 @@ pub fn snapshot_wip(repo: &WorkRepo, slug: &str) -> Result<String, String> {
 }
 
 /// Read current HEAD SHA and a short log summary for archive notes before detaching.
+/// Falls back to querying the preserved branch in `source_path` if the worktree was already detached
+/// during an earlier interrupted archive run.
 pub fn collect_git_summary(repo: &WorkRepo) -> (Option<String>, String) {
     let wt = Path::new(&repo.worktree_path);
-    if !wt.is_dir() {
-        return (repo.final_head_sha.clone(), "(worktree already absent)\n".to_string());
-    }
-    let head_sha = run_git(wt, &["rev-parse", "HEAD"]).ok();
-    let range = format!("{}..HEAD", repo.base_sha);
-    let log_out = run_git(wt, &["log", "--oneline", &range]).unwrap_or_default();
-    let diff_stat = run_git(wt, &["diff", "--stat", &repo.base_sha, "HEAD"]).unwrap_or_default();
+    let src = Path::new(&repo.source_path);
+    let (query_dir, target_ref) = if wt.is_dir() {
+        (wt, "HEAD".to_string())
+    } else if src.is_dir() {
+        (src, repo.branch.clone())
+    } else {
+        return (
+            repo.final_head_sha.clone(),
+            format!("## {} ({})\n- Final HEAD: `{}`\n\n(repo unavailable)\n",
+                repo.alias,
+                repo.branch,
+                repo.final_head_sha.as_deref().unwrap_or("unknown")),
+        );
+    };
+
+    let head_sha = run_git(query_dir, &["rev-parse", &target_ref])
+        .ok()
+        .or_else(|| repo.final_head_sha.clone());
+    let range = format!("{}..{}", repo.base_sha, target_ref);
+    let log_out = run_git(query_dir, &["log", "--oneline", &range]).unwrap_or_default();
+    let diff_stat =
+        run_git(query_dir, &["diff", "--stat", &repo.base_sha, &target_ref]).unwrap_or_default();
     let summary = format!(
         "## {} ({})\n- Base SHA: `{}`\n- Final HEAD: `{}`\n\n### Commits\n```\n{}\n```\n\n### Diff Stat\n```\n{}\n```\n",
         repo.alias,

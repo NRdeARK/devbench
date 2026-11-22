@@ -36,9 +36,9 @@ impl Drop for WorkLock {
     }
 }
 
-/// Write `bytes` atomically using a sibling temporary file + sync + rename.
-/// On Windows, `fs::rename` fails if the destination exists, so we fall back cleanly
-/// inside the caller's exclusive per-work lock.
+/// Write `bytes` atomically via sibling temporary file + fsync + atomic rename.
+/// Rust's `std::fs::rename` uses `MoveFileExW(MOVEFILE_REPLACE_EXISTING)` on Windows and
+/// `rename(2)` on Unix, so readers never observe a missing or partially written file.
 pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let parent = path
         .parent()
@@ -56,47 +56,28 @@ pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
     );
     let tmp_path = parent.join(tmp_name);
 
-    {
+    let write_res = (|| -> Result<(), String> {
         let mut f = File::create(&tmp_path)
             .map_err(|e| format!("Failed to create temp file {}: {e}", tmp_path.display()))?;
         f.write_all(bytes)
             .map_err(|e| format!("Failed to write temp file {}: {e}", tmp_path.display()))?;
         f.sync_all()
             .map_err(|e| format!("Failed to sync temp file {}: {e}", tmp_path.display()))?;
+        Ok(())
+    })();
+
+    if let Err(e) = write_res {
+        let _ = fs::remove_file(&tmp_path);
+        return Err(e);
     }
 
-    if let Err(first_err) = fs::rename(&tmp_path, path) {
-        // On Windows, replacing an existing file via fs::rename returns AlreadyExists/PermissionDenied
-        if cfg!(windows) && path.exists() {
-            let backup = parent.join(format!(
-                ".{}.bak.{}",
-                path.file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("state"),
-                Uuid::new_v4().simple()
-            ));
-            if let Err(e) = fs::rename(path, &backup) {
-                let _ = fs::remove_file(&tmp_path);
-                return Err(format!(
-                    "Failed to replace {} (rename err: {first_err}; backup err: {e})",
-                    path.display()
-                ));
-            }
-            if let Err(e) = fs::rename(&tmp_path, path) {
-                // Restore backup best-effort
-                let _ = fs::rename(&backup, path);
-                let _ = fs::remove_file(&tmp_path);
-                return Err(format!("Failed to finalize {}: {e}", path.display()));
-            }
-            let _ = fs::remove_file(&backup);
-        } else {
-            let _ = fs::remove_file(&tmp_path);
-            return Err(format!(
-                "Failed to atomically rename {} -> {}: {first_err}",
-                tmp_path.display(),
-                path.display()
-            ));
-        }
+    if let Err(err) = fs::rename(&tmp_path, path) {
+        let _ = fs::remove_file(&tmp_path);
+        return Err(format!(
+            "Failed to atomically rename {} -> {}: {err}",
+            tmp_path.display(),
+            path.display()
+        ));
     }
 
     Ok(())

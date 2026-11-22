@@ -1,9 +1,10 @@
-use crate::paths::{devbench_dir, expand_tilde};
+use crate::paths::{devbench_dir, expand_tilde, validate_repo_alias};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::env;
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 pub const CURRENT_SCHEMA_VERSION: u32 = 1;
@@ -134,6 +135,12 @@ impl Default for ArchiveConfig {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct MissingKeyHint {
+    pub key: String,
+    pub example: Value,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct ConfigCheckReport {
     pub config_path: String,
     pub source: String,
@@ -141,14 +148,15 @@ pub struct ConfigCheckReport {
     pub schema_version: u32,
     pub expected_schema_version: u32,
     pub missing_template_keys: Vec<String>,
+    pub missing_key_hints: Vec<MissingKeyHint>,
     pub errors: Vec<String>,
     pub warnings: Vec<String>,
 }
 
 /// Resolve config path using D4 external-first lookup:
-/// 1. `$DEVBENCH_CONFIG`
+/// 1. `$DEVBENCH_CONFIG` (never falls back if explicitly set)
 /// 2. `~/.devbench/config.json`
-/// 3. Optional gitignored repo-local `./config.json` (dev-mode fallback only if present)
+/// 3. Optional gitignored repo-local `./config.json` (dev-mode fallback only when external absent)
 pub fn resolve_config_path() -> Result<(PathBuf, &'static str), String> {
     if let Ok(env_path) = env::var("DEVBENCH_CONFIG") {
         let trimmed = env_path.trim();
@@ -162,7 +170,6 @@ pub fn resolve_config_path() -> Result<(PathBuf, &'static str), String> {
         return Ok((external, "external:~/.devbench/config.json"));
     }
 
-    // Optional dev-mode fallback when developing inside a local clone
     if let Ok(cwd) = env::current_dir() {
         let local = cwd.join("config.json");
         if local.is_file() && cwd.join("templates").join("config.example.json").is_file() {
@@ -173,23 +180,28 @@ pub fn resolve_config_path() -> Result<(PathBuf, &'static str), String> {
     Ok((external, "external:~/.devbench/config.json"))
 }
 
-/// Initialize user config from embedded template without ever overwriting an existing file.
+/// Atomically initialize user config from embedded template (`create_new`), never overwriting an existing file.
 pub fn init_config() -> Result<(PathBuf, bool, ConfigCheckReport), String> {
     let (path, source) = resolve_config_path()?;
-    if path.is_file() {
-        let report = check_config(&path, source);
-        return Ok((path, false, report));
-    }
-
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|e| format!("Failed to create config dir {}: {e}", parent.display()))?;
     }
-    fs::write(&path, CONFIG_TEMPLATE)
-        .map_err(|e| format!("Failed to write {}: {e}", path.display()))?;
+
+    let created = match OpenOptions::new().write(true).create_new(true).open(&path) {
+        Ok(mut f) => {
+            f.write_all(CONFIG_TEMPLATE.as_bytes())
+                .map_err(|e| format!("Failed to write {}: {e}", path.display()))?;
+            f.sync_all()
+                .map_err(|e| format!("Failed to sync {}: {e}", path.display()))?;
+            true
+        }
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => false,
+        Err(e) => return Err(format!("Failed to create {}: {e}", path.display())),
+    };
 
     let report = check_config(&path, source);
-    Ok((path, true, report))
+    Ok((path, created, report))
 }
 
 /// Load and parse user config strictly.
@@ -212,6 +224,14 @@ pub fn load_config() -> Result<(PathBuf, Config), String> {
             e
         )
     })?;
+    if cfg.schema_version > CURRENT_SCHEMA_VERSION {
+        return Err(format!(
+            "{}: unsupported schema_version {} (this devbench supports up to {})",
+            path.display(),
+            cfg.schema_version,
+            CURRENT_SCHEMA_VERSION
+        ));
+    }
     if cfg.work_root.trim().is_empty() {
         return Err(format!("{}: 'work_root' cannot be empty", path.display()));
     }
@@ -221,11 +241,12 @@ pub fn load_config() -> Result<(PathBuf, Config), String> {
     Ok((path, cfg))
 }
 
-/// Validate config syntax, schema_version, template key diff, repo paths, and default agent.
+/// Validate config syntax, schema_version, template key diff + hints, repo aliases/paths, and agents.
 pub fn check_config(path: &Path, source: &str) -> ConfigCheckReport {
     let mut errors = Vec::new();
     let mut warnings = Vec::new();
     let mut missing_template_keys = Vec::new();
+    let mut missing_key_hints = Vec::new();
     let mut schema_version = 0;
 
     let raw = match fs::read_to_string(path) {
@@ -239,6 +260,7 @@ pub fn check_config(path: &Path, source: &str) -> ConfigCheckReport {
                 schema_version,
                 expected_schema_version: CURRENT_SCHEMA_VERSION,
                 missing_template_keys,
+                missing_key_hints,
                 errors,
                 warnings,
             };
@@ -261,6 +283,7 @@ pub fn check_config(path: &Path, source: &str) -> ConfigCheckReport {
                 schema_version,
                 expected_schema_version: CURRENT_SCHEMA_VERSION,
                 missing_template_keys,
+                missing_key_hints,
                 errors,
                 warnings,
             };
@@ -268,7 +291,13 @@ pub fn check_config(path: &Path, source: &str) -> ConfigCheckReport {
     };
 
     if let Ok(template_val) = serde_json::from_str::<Value>(CONFIG_TEMPLATE) {
-        collect_missing_keys(&template_val, &user_val, "", &mut missing_template_keys);
+        collect_missing_keys(
+            &template_val,
+            &user_val,
+            "",
+            &mut missing_template_keys,
+            &mut missing_key_hints,
+        );
     }
 
     let cfg: Config = match serde_json::from_value(user_val) {
@@ -282,6 +311,7 @@ pub fn check_config(path: &Path, source: &str) -> ConfigCheckReport {
                 schema_version,
                 expected_schema_version: CURRENT_SCHEMA_VERSION,
                 missing_template_keys,
+                missing_key_hints,
                 errors,
                 warnings,
             };
@@ -289,7 +319,12 @@ pub fn check_config(path: &Path, source: &str) -> ConfigCheckReport {
     };
 
     schema_version = cfg.schema_version;
-    if cfg.schema_version != CURRENT_SCHEMA_VERSION {
+    if cfg.schema_version > CURRENT_SCHEMA_VERSION {
+        errors.push(format!(
+            "schema_version {} is newer than supported version {}; upgrade devbench",
+            cfg.schema_version, CURRENT_SCHEMA_VERSION
+        ));
+    } else if cfg.schema_version != CURRENT_SCHEMA_VERSION {
         warnings.push(format!(
             "schema_version is {}, expected {} (compare against templates/config.example.json)",
             cfg.schema_version, CURRENT_SCHEMA_VERSION
@@ -308,7 +343,26 @@ pub fn check_config(path: &Path, source: &str) -> ConfigCheckReport {
         ));
     }
 
+    // Validate herdr.name_prefix against hc's `[a-z0-9-_]` rule
+    if cfg.herdr.name_prefix.is_empty()
+        || cfg.herdr.name_prefix.len() > 8
+        || !cfg
+            .herdr
+            .name_prefix
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
+    {
+        errors.push(format!(
+            "herdr.name_prefix '{}' must be 1..8 lowercase chars of [a-z0-9-_]",
+            cfg.herdr.name_prefix
+        ));
+    }
+
     for (alias, repo) in &cfg.repos {
+        if let Err(e) = validate_repo_alias(alias) {
+            errors.push(e);
+            continue;
+        }
         match expand_tilde(&repo.path) {
             Ok(p) => {
                 if !p.exists() {
@@ -331,6 +385,13 @@ pub fn check_config(path: &Path, source: &str) -> ConfigCheckReport {
         if agent.argv.is_empty() {
             errors.push(format!("agent '{name}' has an empty argv array"));
         }
+        if let Some(resume) = &agent.resume_argv {
+            if !resume.iter().any(|a| a.contains("{session_id}")) {
+                warnings.push(format!(
+                    "agent '{name}' resume_argv does not contain '{{session_id}}' placeholder"
+                ));
+            }
+        }
         if name == "codex" && !agent.argv.iter().any(|a| a == "--no-daemon") {
             warnings.push(
                 "agent 'codex' argv does not include '--no-daemon' (required by herdr-core)"
@@ -346,12 +407,19 @@ pub fn check_config(path: &Path, source: &str) -> ConfigCheckReport {
         schema_version,
         expected_schema_version: CURRENT_SCHEMA_VERSION,
         missing_template_keys,
+        missing_key_hints,
         errors,
         warnings,
     }
 }
 
-fn collect_missing_keys(template: &Value, user: &Value, prefix: &str, out: &mut Vec<String>) {
+fn collect_missing_keys(
+    template: &Value,
+    user: &Value,
+    prefix: &str,
+    out_keys: &mut Vec<String>,
+    out_hints: &mut Vec<MissingKeyHint>,
+) {
     let (Some(t_obj), Some(u_obj)) = (template.as_object(), user.as_object()) else {
         return;
     };
@@ -361,15 +429,20 @@ fn collect_missing_keys(template: &Value, user: &Value, prefix: &str, out: &mut 
         } else {
             format!("{prefix}.{k}")
         };
-        // Do not diff user-chosen map entries inside repos or agents
         if prefix == "repos" || prefix == "agents" {
             continue;
         }
         match u_obj.get(k) {
-            None => out.push(key_path),
+            None => {
+                out_keys.push(key_path.clone());
+                out_hints.push(MissingKeyHint {
+                    key: key_path,
+                    example: t_val.clone(),
+                });
+            }
             Some(u_val) => {
                 if k != "repos" && k != "agents" {
-                    collect_missing_keys(t_val, u_val, &key_path, out);
+                    collect_missing_keys(t_val, u_val, &key_path, out_keys, out_hints);
                 }
             }
         }
