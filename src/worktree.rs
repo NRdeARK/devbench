@@ -1,8 +1,11 @@
 use crate::config::Config;
 use crate::paths::{
-    check_path_length, expand_tilde, normalize_for_compare, sanitize_slug, validate_repo_alias,
+    check_path_length, expand_tilde, normalize_for_compare, sanitize_identifier, sanitize_slug,
+    validate_repo_alias,
 };
-use crate::state::{work_state_path, RepoStatus, WorkRepo, WorkState, WorkStatus};
+use crate::state::{
+    load_work, mutate_work, work_state_path, RepoStatus, WorkRepo, WorkState, WorkStatus,
+};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -190,6 +193,7 @@ pub fn setup_workspace(
             Ok(_) => {
                 created.push(WorkRepo {
                     alias: item.alias,
+                    track: None,
                     source_path: item.source_path.to_string_lossy().to_string(),
                     worktree_path: wt_str,
                     branch: branch_name.clone(),
@@ -244,12 +248,154 @@ pub fn setup_workspace(
     Ok(state)
 }
 
+/// Add an extra repo worktree or parallel track worktree inside an existing active work folder.
+/// - With `track = Some(t)`: creates `<work_dir>/<alias>--<t>` on branch `<prefix><slug>--<t>`.
+/// - With `track = None`: creates `<work_dir>/<alias>` on branch `<prefix><slug>` (to attach a new repo to an existing work).
+pub fn add_track_worktree(
+    cfg: &Config,
+    raw_slug: &str,
+    raw_alias: &str,
+    raw_track: Option<&str>,
+    base_ref_override: Option<&str>,
+) -> Result<WorkRepo, String> {
+    let slug = sanitize_slug(raw_slug)?;
+    let alias = raw_alias.trim();
+    validate_repo_alias(alias)?;
+
+    let clean_track = raw_track
+        .map(|t| sanitize_identifier("Track", t))
+        .transpose()?;
+
+    let repo_cfg = cfg.repos.get(alias).ok_or_else(|| {
+        format!("Unknown repo alias '{alias}'. Add it to config.repos or run `devbench config check`.")
+    })?;
+    let source_path = expand_tilde(&repo_cfg.path)?;
+    if !source_path.is_dir() || !source_path.join(".git").exists() {
+        return Err(format!(
+            "Repo '{alias}' is missing or not a Git repo: {}",
+            source_path.display()
+        ));
+    }
+
+    let state = load_work(&slug)?;
+    if matches!(state.status, WorkStatus::Archived | WorkStatus::Archiving) {
+        return Err(format!(
+            "Cannot add worktree to work '{slug}': status is {:?}",
+            state.status
+        ));
+    }
+
+    let work_dir = PathBuf::from(&state.work_dir);
+    if !work_dir.is_dir() {
+        return Err(format!(
+            "Work folder does not exist: {}",
+            work_dir.display()
+        ));
+    }
+
+    let (dir_name, branch_name) = match clean_track.as_deref() {
+        Some(t) => (
+            format!("{alias}--{t}"),
+            format!("{}{slug}--{t}", cfg.branch_prefix),
+        ),
+        None => (alias.to_string(), format!("{}{slug}", cfg.branch_prefix)),
+    };
+
+    let worktree_path = work_dir.join(&dir_name);
+    check_path_length(&worktree_path)?;
+    let target_norm = normalize_for_compare(&worktree_path);
+
+    if state.repos.iter().any(|r| {
+        (r.alias == alias && r.track == clean_track)
+            || normalize_for_compare(Path::new(&r.worktree_path)) == target_norm
+    }) {
+        return Err(format!(
+            "Worktree '{}' already exists in work '{slug}'",
+            dir_name
+        ));
+    }
+    if worktree_path.exists() {
+        return Err(format!(
+            "Worktree directory already exists on disk: {}",
+            worktree_path.display()
+        ));
+    }
+
+    let effective_base_ref = base_ref_override
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .unwrap_or(repo_cfg.base_ref.as_str());
+    let rev_arg = format!("{effective_base_ref}^{{commit}}");
+    let base_sha = run_git(&source_path, &["rev-parse", "--verify", &rev_arg]).map_err(|_| {
+        format!(
+            "Repo '{alias}': base_ref '{effective_base_ref}' not found in {}",
+            source_path.display()
+        )
+    })?;
+
+    let ref_check = format!("refs/heads/{branch_name}");
+    if run_git(&source_path, &["show-ref", "--verify", "--quiet", &ref_check]).is_ok() {
+        return Err(format!(
+            "Repo '{alias}': branch '{branch_name}' already exists in {}. Choose a distinct track name.",
+            source_path.display()
+        ));
+    }
+
+    let wt_str = worktree_path.to_string_lossy().to_string();
+    run_git(
+        &source_path,
+        &["worktree", "add", "-b", &branch_name, &wt_str, &base_sha],
+    )?;
+
+    let new_repo = WorkRepo {
+        alias: alias.to_string(),
+        track: clean_track.clone(),
+        source_path: source_path.to_string_lossy().to_string(),
+        worktree_path: wt_str.clone(),
+        branch: branch_name.clone(),
+        base_ref: effective_base_ref.to_string(),
+        base_sha,
+        status: RepoStatus::Ready,
+        final_head_sha: None,
+    };
+
+    let save_res = mutate_work(&slug, |s| {
+        if matches!(s.status, WorkStatus::Archived | WorkStatus::Archiving) {
+            return Err(format!(
+                "Cannot add worktree to work '{slug}': status changed to {:?}",
+                s.status
+            ));
+        }
+        if s.repos.iter().any(|r| {
+            (r.alias == alias && r.track == clean_track)
+                || normalize_for_compare(Path::new(&r.worktree_path)) == target_norm
+        }) {
+            return Err(format!(
+                "Worktree '{}' was concurrently added to work '{slug}'",
+                dir_name
+            ));
+        }
+        s.repos.push(new_repo.clone());
+        Ok((true, ()))
+    });
+
+    if let Err(err) = save_res {
+        let _ = run_git(&source_path, &["worktree", "remove", "--force", &wt_str]);
+        let _ = run_git(&source_path, &["worktree", "prune"]);
+        let _ = run_git(&source_path, &["branch", "-D", &branch_name]);
+        return Err(err);
+    }
+
+    Ok(new_repo)
+}
+
 /// Inspect a worktree for dirty/untracked files, gitignored files, unpushed commits, and submodules.
 pub fn inspect_worktree(repo: &WorkRepo) -> Result<WorktreeInspection, String> {
     let wt = PathBuf::from(&repo.worktree_path);
+    let label = repo.display_label();
     if !wt.is_dir() {
         return Ok(WorktreeInspection {
-            alias: repo.alias.clone(),
+            alias: label,
             path: wt,
             dirty_paths: Vec::new(),
             ignored_paths: Vec::new(),
@@ -286,7 +432,7 @@ pub fn inspect_worktree(repo: &WorkRepo) -> Result<WorktreeInspection, String> {
     let has_submodules = wt.join(".gitmodules").is_file();
 
     Ok(WorktreeInspection {
-        alias: repo.alias.clone(),
+        alias: label,
         path: wt,
         dirty_paths,
         ignored_paths,
@@ -310,6 +456,7 @@ pub fn snapshot_wip(repo: &WorkRepo, slug: &str) -> Result<String, String> {
 pub fn collect_git_summary(repo: &WorkRepo) -> (Option<String>, String) {
     let wt = Path::new(&repo.worktree_path);
     let src = Path::new(&repo.source_path);
+    let label = repo.display_label();
     let (query_dir, target_ref) = if wt.is_dir() {
         (wt, "HEAD".to_string())
     } else if src.is_dir() {
@@ -318,7 +465,7 @@ pub fn collect_git_summary(repo: &WorkRepo) -> (Option<String>, String) {
         return (
             repo.final_head_sha.clone(),
             format!("## {} ({})\n- Final HEAD: `{}`\n\n(repo unavailable)\n",
-                repo.alias,
+                label,
                 repo.branch,
                 repo.final_head_sha.as_deref().unwrap_or("unknown")),
         );
@@ -333,7 +480,7 @@ pub fn collect_git_summary(repo: &WorkRepo) -> (Option<String>, String) {
         run_git(query_dir, &["diff", "--stat", &repo.base_sha, &target_ref]).unwrap_or_default();
     let summary = format!(
         "## {} ({})\n- Base SHA: `{}`\n- Final HEAD: `{}`\n\n### Commits\n```\n{}\n```\n\n### Diff Stat\n```\n{}\n```\n",
-        repo.alias,
+        label,
         repo.branch,
         repo.base_sha,
         head_sha.as_deref().unwrap_or("unknown"),

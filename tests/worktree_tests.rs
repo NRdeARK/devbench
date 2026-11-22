@@ -1,7 +1,7 @@
 use devbench::archive::archive_work;
 use devbench::config::{AgentConfig, ArchiveConfig, CaptureMode, Config, HerdrConfig, RepoConfig};
 use devbench::state::{load_work, save_work, ArchivePhase, RepoStatus, WorkStatus};
-use devbench::worktree::{run_git, setup_workspace};
+use devbench::worktree::{add_track_worktree, run_git, setup_workspace};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
@@ -114,6 +114,13 @@ fn preflight_guards_dirty_block_submodule_no_partial_wip_and_archive_collision()
     // 5. Re-running setup for same slug rejected (state exists)
     assert!(setup_workspace(&cfg, "auth-refresh", None, &["api".into()]).is_err());
 
+    // 5b. Add parallel track worktree inside the same initiative work & reject duplicate track
+    let track_repo = add_track_worktree(&cfg, "auth-refresh", "api", Some("phase-2"), None).unwrap();
+    assert_eq!(track_repo.track.as_deref(), Some("phase-2"));
+    assert_eq!(track_repo.branch, "devbench/auth-refresh--phase-2");
+    assert!(Path::new(&track_repo.worktree_path).is_dir());
+    assert!(add_track_worktree(&cfg, "auth-refresh", "api", Some("phase-2"), None).is_err());
+
     // 6. Submodule in repo B blocks BEFORE committing WIP in dirty repo A!
     let api_wt = tmp.path().join("work").join("auth-refresh").join("api");
     let web_wt = tmp.path().join("work").join("auth-refresh").join("web");
@@ -146,10 +153,12 @@ fn preflight_guards_dirty_block_submodule_no_partial_wip_and_archive_collision()
     assert!(Path::new(&report.snapshot_path).is_file());
     let summary = fs::read_to_string(Path::new(&report.archive_path).join("git_summary.md")).unwrap();
     assert!(summary.contains("devbench/auth-refresh"));
+    assert!(summary.contains("devbench/auth-refresh--phase-2"));
 
     // Source repos clean and preserved branches match HEAD
-    let branches_a = run_git(&repo_a, &["branch", "--list", "devbench/auth-refresh"]).unwrap();
+    let branches_a = run_git(&repo_a, &["branch", "--list", "devbench/auth-refresh*"]).unwrap();
     assert!(branches_a.contains("devbench/auth-refresh"));
+    assert!(branches_a.contains("devbench/auth-refresh--phase-2"));
     assert!(!run_git(&repo_a, &["worktree", "list"]).unwrap().contains("auth-refresh"));
 
     // Rerun after Moved is rejected cleanly

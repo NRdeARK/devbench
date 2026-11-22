@@ -309,7 +309,7 @@ pub fn archive_work(
         .map(|r| {
             format!(
                 "{}:{}@{}",
-                r.alias,
+                r.display_label(),
                 r.branch,
                 r.final_head_sha
                     .as_deref()

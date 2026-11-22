@@ -37,6 +37,8 @@ pub enum RepoStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkRepo {
     pub alias: String,
+    #[serde(default)]
+    pub track: Option<String>,
     pub source_path: String,
     pub worktree_path: String,
     pub branch: String,
@@ -45,6 +47,15 @@ pub struct WorkRepo {
     pub status: RepoStatus,
     #[serde(default)]
     pub final_head_sha: Option<String>,
+}
+
+impl WorkRepo {
+    pub fn display_label(&self) -> String {
+        match self.track.as_deref() {
+            Some(t) if !t.is_empty() => format!("{}:{t}", self.alias),
+            _ => self.alias.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

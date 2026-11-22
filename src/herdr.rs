@@ -18,6 +18,12 @@ pub struct SpaceCreated {
 }
 
 #[derive(Debug, Clone)]
+pub struct TerminalPlacement {
+    pub tab_id: String,
+    pub pane_id: Option<String>,
+}
+
+#[derive(Debug, Clone)]
 pub struct HcTerminalInfo {
     pub id: String,
     pub live: bool,
@@ -50,11 +56,12 @@ impl HerdrClient {
     }
 
     /// Create a dedicated 1:1 Herdr workspace via `herdr-app do space.new`.
-    /// Captures space ID as well as any initial terminal/pane created by `space.new`.
+    /// Labels the initial shell tab `"shell"` and captures space ID + initial terminal/pane IDs.
     pub fn space_new(&self, name: &str, folder: &Path, focus: bool) -> Result<SpaceCreated, String> {
         let payload = serde_json::json!({
             "name": name,
             "folder": folder.to_string_lossy(),
+            "tab": "shell",
             "focus": focus,
         });
         let out = run_cmd(&self.app_bin, &["do", "space.new", &payload.to_string()])
@@ -85,6 +92,104 @@ impl HerdrClient {
             initial_terminal_id,
             initial_pane_id,
         })
+    }
+
+    /// Rename a Herdr tab via `herdr-app do tab.rename {id, name}`.
+    pub fn tab_rename(&self, tab_id: &str, name: &str) -> Result<(), String> {
+        let payload = serde_json::json!({ "id": tab_id, "name": name });
+        let out = run_cmd(&self.app_bin, &["do", "tab.rename", &payload.to_string()])?;
+        if let Ok(val) = serde_json::from_str::<Value>(&out) {
+            if let Some(err) = val.get("error").and_then(|v| v.as_str()) {
+                return Err(format!("herdr-app tab.rename error: {err}"));
+            }
+        }
+        Ok(())
+    }
+
+    /// Locate a terminal's Herdr tab ID and pane ID via `herdr-app ls`.
+    pub fn find_terminal_placement(
+        &self,
+        space_id: &str,
+        terminal_id: &str,
+        hc_name: &str,
+    ) -> Result<Option<TerminalPlacement>, String> {
+        let out = run_cmd(&self.app_bin, &["ls"])?;
+        let val: Value = serde_json::from_str(&out)
+            .map_err(|e| format!("Unexpected JSON from herdr-app ls: {e}"))?;
+        let Some(spaces) = val
+            .get("spaces")
+            .and_then(|s| s.as_array())
+            .or_else(|| val.as_array())
+        else {
+            return Ok(None);
+        };
+
+        let search_space = |space: &Value| -> Option<TerminalPlacement> {
+            let tabs = space.get("tabs").and_then(|t| t.as_array())?;
+            for tab in tabs {
+                let Some(tab_id) = tab.get("id").and_then(|v| v.as_str()) else {
+                    continue;
+                };
+                let Some(terminals) = tab.get("terminals").and_then(|t| t.as_array()) else {
+                    continue;
+                };
+                for term in terminals {
+                    let t_id = term.get("terminal").and_then(|v| v.as_str());
+                    let t_name = term.get("name").and_then(|v| v.as_str());
+                    if t_id == Some(terminal_id) || t_name == Some(hc_name) {
+                        let pane_id = term
+                            .get("pane")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string());
+                        return Some(TerminalPlacement {
+                            tab_id: tab_id.to_string(),
+                            pane_id,
+                        });
+                    }
+                }
+            }
+            None
+        };
+
+        // Prefer the target space first, then fall back to any space
+        if let Some(target) = spaces.iter().find(|s| {
+            s.get("id")
+                .or_else(|| s.get("space"))
+                .and_then(|v| v.as_str())
+                == Some(space_id)
+        }) {
+            if let Some(found) = search_space(target) {
+                return Ok(Some(found));
+            }
+        }
+        for space in spaces {
+            if let Some(found) = search_space(space) {
+                return Ok(Some(found));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Best-effort: wait briefly for Herdr to attach a spawned terminal to its space tab,
+    /// rename the tab to its role label (`owner`, `worker:<domain>`), and return tab/pane IDs.
+    pub fn wait_and_label_tab(
+        &self,
+        space_id: &str,
+        terminal_id: &str,
+        hc_name: &str,
+        tab_label: &str,
+    ) -> Option<TerminalPlacement> {
+        for attempt in 0..5 {
+            if let Ok(Some(placement)) = self.find_terminal_placement(space_id, terminal_id, hc_name)
+            {
+                let _ = self.tab_rename(&placement.tab_id, tab_label);
+                return Some(placement);
+            }
+            if attempt < 4 {
+                std::thread::sleep(std::time::Duration::from_millis(120));
+            }
+        }
+        None
     }
 
     /// Close a 1:1 Herdr workspace via `herdr-app do space.close {id, confirmed: true}`.
@@ -271,13 +376,17 @@ fn parse_hc_terminal_json(val: &Value, fallback_id: &str) -> Result<HcTerminalIn
         }
     };
     let id = val
-        .get("id")
+        .get("address")
+        .or_else(|| val.get("id"))
         .and_then(|v| v.as_str())
         .unwrap_or(fallback_id)
         .to_string();
     let status = val
         .get("status")
-        .and_then(|v| v.as_str())
+        .and_then(|v| {
+            v.as_str()
+                .or_else(|| v.get("state").and_then(|s| s.as_str()))
+        })
         .map(|s| s.to_string());
     let space_label = val
         .get("labels")

@@ -21,8 +21,23 @@ use std::process::ExitCode;
 struct FakeState {
     next_space: u32,
     next_term: u32,
+    next_tab: u32,
     spaces: BTreeMap<String, FakeSpace>,
     terminals: BTreeMap<String, FakeTerm>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct FakeTabTerm {
+    terminal: String,
+    pane: String,
+    name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct FakeTab {
+    id: String,
+    name: String,
+    terminals: Vec<FakeTabTerm>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,6 +46,8 @@ struct FakeSpace {
     name: String,
     folder: String,
     initial_terminal: String,
+    #[serde(default)]
+    tabs: Vec<FakeTab>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,7 +79,36 @@ fn main() -> ExitCode {
             let spaces: Vec<Value> = state
                 .spaces
                 .values()
-                .map(|s| json!({"id": s.id, "name": s.name, "folder": s.folder}))
+                .map(|s| {
+                    let tabs: Vec<Value> = s
+                        .tabs
+                        .iter()
+                        .map(|t| {
+                            let terms: Vec<Value> = t
+                                .terminals
+                                .iter()
+                                .map(|tt| {
+                                    json!({
+                                        "terminal": tt.terminal,
+                                        "pane": tt.pane,
+                                        "name": tt.name,
+                                    })
+                                })
+                                .collect();
+                            json!({
+                                "id": t.id,
+                                "name": t.name,
+                                "terminals": terms,
+                            })
+                        })
+                        .collect();
+                    json!({
+                        "id": s.id,
+                        "name": s.name,
+                        "folder": s.folder,
+                        "tabs": tabs,
+                    })
+                })
                 .collect();
             println!("{}", json!({"spaces": spaces}));
             ExitCode::SUCCESS
@@ -108,7 +154,10 @@ fn handle_app_do(args: &[String], script: &Value, state: &mut FakeState) -> Exit
     match cmd {
         "space.new" => {
             for k in obj.keys() {
-                if !matches!(k.as_str(), "name" | "folder" | "focus" | "argv" | "task" | "machine") {
+                if !matches!(
+                    k.as_str(),
+                    "name" | "folder" | "tab" | "focus" | "argv" | "task" | "machine"
+                ) {
                     eprintln!("{{\"error\":\"unknown argument '{k}' for space.new\"}}");
                     return ExitCode::from(1);
                 }
@@ -119,10 +168,14 @@ fn handle_app_do(args: &[String], script: &Value, state: &mut FakeState) -> Exit
             }
             state.next_space += 1;
             state.next_term += 1;
+            state.next_tab += 1;
             let sid = format!("s{}", state.next_space);
             let tid = format!("t{}", state.next_term);
+            let pid = format!("p{}", state.next_term);
+            let tab_id = format!("tb{}", state.next_tab);
             let name = obj.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
             let folder = obj.get("folder").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let tab_name = obj.get("tab").and_then(|v| v.as_str()).unwrap_or("1").to_string();
             state.spaces.insert(
                 sid.clone(),
                 FakeSpace {
@@ -130,11 +183,43 @@ fn handle_app_do(args: &[String], script: &Value, state: &mut FakeState) -> Exit
                     name,
                     folder,
                     initial_terminal: tid.clone(),
+                    tabs: vec![FakeTab {
+                        id: tab_id,
+                        name: tab_name,
+                        terminals: vec![FakeTabTerm {
+                            terminal: tid.clone(),
+                            pane: pid.clone(),
+                            name: None,
+                        }],
+                    }],
                 },
             );
             save_state(state);
-            println!("{}", json!({"space": sid, "terminal": tid, "pane": format!("p{}", state.next_term)}));
+            println!("{}", json!({"space": sid, "terminal": tid, "pane": pid}));
             ExitCode::SUCCESS
+        }
+        "tab.rename" => {
+            for k in obj.keys() {
+                if !matches!(k.as_str(), "id" | "name") {
+                    eprintln!("{{\"error\":\"unknown argument '{k}' for tab.rename\"}}");
+                    return ExitCode::from(1);
+                }
+            }
+            let Some(id) = obj.get("id").and_then(|v| v.as_str()) else {
+                eprintln!("{{\"error\":\"missing required argument 'id'\"}}");
+                return ExitCode::from(1);
+            };
+            let new_name = obj.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            for space in state.spaces.values_mut() {
+                if let Some(tab) = space.tabs.iter_mut().find(|t| t.id == id) {
+                    tab.name = new_name.clone();
+                    save_state(state);
+                    println!("{}", json!({"id": id, "name": new_name}));
+                    return ExitCode::SUCCESS;
+                }
+            }
+            eprintln!("{{\"error\":\"tab not found\"}}");
+            ExitCode::from(1)
         }
         "space.close" => {
             // Strict schema matching real `herdr-app commands`: ONLY `id` and `confirmed`!
@@ -222,6 +307,7 @@ fn handle_hc_run(args: &[String], script: &Value, state: &mut FakeState) -> Exit
 
     state.next_term += 1;
     let tid = format!("t{}", state.next_term);
+    let pid = format!("p{}", state.next_term);
     let status = script
         .get("run_status")
         .and_then(|v| v.as_str())
@@ -235,6 +321,23 @@ fn handle_hc_run(args: &[String], script: &Value, state: &mut FakeState) -> Exit
         .get("first_message_reason")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
+
+    if let Some(space_id) = labels.get("herdr.space").cloned() {
+        if let Some(space) = state.spaces.get_mut(&space_id) {
+            state.next_tab += 1;
+            let tab_id = format!("tb{}", state.next_tab);
+            let auto_num = (space.tabs.len() + 1).to_string();
+            space.tabs.push(FakeTab {
+                id: tab_id,
+                name: auto_num,
+                terminals: vec![FakeTabTerm {
+                    terminal: tid.clone(),
+                    pane: pid,
+                    name: Some(name.clone()),
+                }],
+            });
+        }
+    }
 
     state.terminals.insert(
         name.clone(),
@@ -270,10 +373,13 @@ fn handle_hc_get(args: &[String], script: &Value, state: &FakeState) -> ExitCode
         return ExitCode::from(3);
     };
     let out = json!({
-        "id": term.id,
+        "address": term.id,
         "name": term.name,
         "state": term.state,
-        "status": term.status,
+        "status": {
+            "app": "claude-code",
+            "state": term.status,
+        },
         "labels": term.labels,
         "first_message": {
             "sent": term.first_message_sent,

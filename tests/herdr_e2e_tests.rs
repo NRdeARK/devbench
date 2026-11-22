@@ -180,15 +180,23 @@ fn e2e_spawn_reuse_blocked_status_bind_resume_and_archive() {
     let owner_native_id = sp1_json["session"]["native_session_id"].as_str().unwrap().to_string();
     assert!(!owner_native_id.is_empty());
 
-    // Verify shim log: space.new then hc run --bg --outlive-parent --label herdr.space=s1 ... claude --session-id <uuid>
+    // Verify shim log: space.new with tab="shell", hc run --bg --outlive-parent --label herdr.space=s1 ... claude --session-id <uuid>, then tab.rename to "owner"
     let log1 = env.read_log();
-    assert!(log1.iter().any(|a| a.len() >= 2 && a[0] == "do" && a[1] == "space.new"));
+    assert!(log1
+        .iter()
+        .any(|a| a.len() >= 3 && a[0] == "do" && a[1] == "space.new" && a[2].contains("\"tab\":\"shell\"")));
     let run_call = log1.iter().find(|a| a.first().map(|s| s.as_str()) == Some("run")).unwrap();
     assert!(run_call.contains(&"--bg".to_string()));
     assert!(run_call.contains(&"--outlive-parent".to_string()));
     assert!(run_call.contains(&"herdr.space=s1".to_string()));
     assert!(run_call.contains(&"--session-id".to_string()));
     assert!(run_call.contains(&owner_native_id));
+    assert!(log1
+        .iter()
+        .any(|a| a.len() >= 3 && a[0] == "do" && a[1] == "tab.rename" && a[2].contains("\"name\":\"owner\"")));
+    assert!(sp1_json["session"]["herdr_tab_id"].as_str().is_some());
+    assert!(sp1_json["session"]["herdr_pane_id"].as_str().is_some());
+    assert!(owner_tid.starts_with('t'));
 
     // 4. Second spawn of same role reuses live terminal idempotently (no new `run`)
     env.clear_log();
@@ -296,4 +304,63 @@ fn e2e_spawn_failure_rolls_back_newly_created_space() {
     assert!(log
         .iter()
         .any(|a| a.len() >= 3 && a[0] == "do" && a[1] == "space.close" && a[2].contains("\"id\":\"s1\"")));
+}
+
+#[test]
+fn e2e_initiative_multi_track_spawn_tab_labels_status_done_and_archive() {
+    let env = TestEnv::new();
+
+    // 1. Create single-repo initiative work
+    let new_out = env.run(&["new", "ga-v02", "--repos", "api", "--title", "Initiative v0.2"], &[]);
+    assert!(new_out.status.success(), "{}", String::from_utf8_lossy(&new_out.stderr));
+
+    // 2. Spawn Owner on default track (with status "done" to verify object status decoding!)
+    env.set_script(serde_json::json!({ "run_status": "done" }));
+    let sp_owner = env.run(&["spawn", "ga-v02", "--role", "owner", "--cwd-repo", "api"], &[]);
+    assert!(sp_owner.status.success(), "{}", String::from_utf8_lossy(&sp_owner.stderr));
+    env.set_script(serde_json::json!({}));
+
+    // 3. Reconcile status: live object status {"state": "done"} maps to SessionStatus::Idle
+    let st_out = env.run(&["status", "ga-v02"], &[]);
+    assert!(st_out.status.success());
+    let st_json: Value = serde_json::from_slice(&st_out.stdout).unwrap();
+    assert_eq!(st_json["works"][0]["sessions"][0]["status"], "idle");
+
+    // 4. Spawn parallel track worker (--track modes, auto-infers single repo 'api' + domain 'modes')
+    env.clear_log();
+    let sp_track = env.run(
+        &["spawn", "ga-v02", "--role", "worker", "--track", "modes", "--task", "Build modes"],
+        &[],
+    );
+    assert!(sp_track.status.success(), "stderr: {}", String::from_utf8_lossy(&sp_track.stderr));
+    let sp_track_json: Value = serde_json::from_slice(&sp_track.stdout).unwrap();
+    assert_eq!(sp_track_json["session"]["key"], "worker-modes");
+    assert!(sp_track_json["session"]["cwd"].as_str().unwrap().ends_with("api--modes"));
+    assert!(sp_track_json["session"]["herdr_tab_id"].as_str().is_some());
+
+    // Must reuse existing space (NO second space.new) and rename tab to "worker:modes"
+    let log_t = env.read_log();
+    assert!(!log_t.iter().any(|a| a.len() >= 2 && a[0] == "do" && a[1] == "space.new"));
+    assert!(log_t
+        .iter()
+        .any(|a| a.len() >= 3 && a[0] == "do" && a[1] == "tab.rename" && a[2].contains("\"name\":\"worker:modes\"")));
+
+    // 5. Explicitly attach a second repo (`web`) to the active initiative via `add-track`
+    let add_web = env.run(&["add-track", "ga-v02", "--repo", "web"], &[]);
+    assert!(add_web.status.success(), "stderr: {}", String::from_utf8_lossy(&add_web.stderr));
+
+    // 6. Archive detaches ALL 3 worktrees (api, api--modes, web) and preserves ALL 3 branches
+    let arch = env.run(&["archive", "ga-v02"], &[]);
+    assert!(arch.status.success(), "stderr: {}", String::from_utf8_lossy(&arch.stderr));
+    let arch_json: Value = serde_json::from_slice(&arch.stdout).unwrap();
+    let kept: Vec<&str> = arch_json["kept_branches"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|v| v.as_str())
+        .collect();
+    assert_eq!(kept.len(), 3);
+    assert!(kept.iter().any(|b| b.contains("devbench/ga-v02@")));
+    assert!(kept.iter().any(|b| b.contains("api:modes:devbench/ga-v02--modes@")));
+    assert!(kept.iter().any(|b| b.contains("web:devbench/ga-v02@")));
 }

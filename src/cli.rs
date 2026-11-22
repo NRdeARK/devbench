@@ -8,7 +8,7 @@ use crate::state::{
     list_works_with_warnings, load_work, mutate_work, save_work, CaptureState, SessionStatus,
     SessionTier, WorkSession, WorkState, WorkStatus,
 };
-use crate::worktree::setup_workspace;
+use crate::worktree::{add_track_worktree, setup_workspace};
 use chrono::DateTime;
 use clap::{Parser, Subcommand, ValueEnum};
 use serde_json::json;
@@ -47,12 +47,26 @@ pub enum Commands {
         #[arg(long)]
         title: Option<String>,
     },
+    /// Add an extra repo or parallel branch track worktree inside an existing active work
+    AddTrack {
+        /// Existing active work slug
+        slug: String,
+        /// Repo alias from config.repos
+        #[arg(long)]
+        repo: String,
+        /// Optional parallel track name (creates <repo>--<track> on branch <prefix><slug>--<track>)
+        #[arg(long)]
+        track: Option<String>,
+        /// Optional git base ref override (defaults to repo's config.base_ref)
+        #[arg(long)]
+        base_ref: Option<String>,
+    },
     /// Launch a persistent Owner or domain-worker session inside the work's 1:1 Herdr workspace
     Spawn {
         slug: String,
         #[arg(long, value_enum, default_value_t = RoleArg::Owner)]
         role: RoleArg,
-        /// Required when --role worker (e.g. backend, web, docs; cannot be 'owner')
+        /// Required when --role worker unless --track is provided (e.g. backend, web, review; cannot be 'owner')
         #[arg(long)]
         domain: Option<String>,
         /// Agent harness key in config.agents (defaults to config.default_agent)
@@ -61,6 +75,9 @@ pub enum Commands {
         /// Repo alias inside the work folder to use as cwd (defaults to work root folder)
         #[arg(long)]
         cwd_repo: Option<String>,
+        /// Optional parallel branch track inside the same work (auto-creates <repo>--<track> worktree if missing)
+        #[arg(long)]
+        track: Option<String>,
         /// First task prompt passed directly into `hc run`
         #[arg(long)]
         task: Option<String>,
@@ -147,14 +164,36 @@ pub fn run(cli: Cli) -> Result<String, String> {
             }))
             .unwrap())
         }
+        Commands::AddTrack {
+            slug,
+            repo,
+            track,
+            base_ref,
+        } => {
+            let (_, cfg) = load_config()?;
+            let clean_slug = sanitize_slug(&slug)?;
+            let added = add_track_worktree(
+                &cfg,
+                &clean_slug,
+                &repo,
+                track.as_deref(),
+                base_ref.as_deref(),
+            )?;
+            Ok(serde_json::to_string_pretty(&json!({
+                "slug": clean_slug,
+                "repo": added,
+            }))
+            .unwrap())
+        }
         Commands::Spawn {
             slug,
             role,
             domain,
             agent,
             cwd_repo,
+            track,
             task,
-        } => cmd_spawn(&slug, role, domain, agent, cwd_repo, task),
+        } => cmd_spawn(&slug, role, domain, agent, cwd_repo, track, task),
         Commands::Status { slug, offline } => cmd_status(slug.as_deref(), offline),
         Commands::Bind {
             slug,
@@ -210,19 +249,27 @@ fn cmd_spawn(
     domain: Option<String>,
     agent_opt: Option<String>,
     cwd_repo: Option<String>,
+    track_opt: Option<String>,
     task: Option<String>,
 ) -> Result<String, String> {
     let slug = sanitize_slug(raw_slug)?;
     let (_, cfg) = load_config()?;
 
+    let clean_track = track_opt
+        .as_deref()
+        .map(|t| sanitize_identifier("Track", t))
+        .transpose()?;
+
     let (tier, key, clean_domain) = match role {
         RoleArg::Owner => (SessionTier::Owner, "owner".to_string(), None),
         RoleArg::Worker => {
-            let dom = domain
-                .as_deref()
+            let dom_source = domain.as_deref().or(clean_track.as_deref());
+            let dom = dom_source
                 .map(|d| sanitize_identifier("Worker domain", d))
                 .transpose()?
-                .ok_or_else(|| "--domain <name> is required when --role worker".to_string())?;
+                .ok_or_else(|| {
+                    "--domain <name> (or --track <name>) is required when --role worker".to_string()
+                })?;
             if dom == "owner" {
                 return Err(
                     "Worker --domain cannot be 'owner' (reserved for the Owner tier)".to_string(),
@@ -246,11 +293,44 @@ fn cmd_spawn(
         ));
     }
 
-    let cwd = if let Some(alias) = cwd_repo {
+    let cwd = if let Some(track) = clean_track.as_deref() {
+        let target_alias = if let Some(alias) = cwd_repo.as_deref() {
+            alias.trim().to_string()
+        } else {
+            let distinct: Vec<&str> = {
+                let mut seen = HashSet::new();
+                state
+                    .repos
+                    .iter()
+                    .filter(|r| seen.insert(r.alias.as_str()))
+                    .map(|r| r.alias.as_str())
+                    .collect()
+            };
+            if distinct.len() == 1 {
+                distinct[0].to_string()
+            } else {
+                return Err(format!(
+                    "Specify --cwd-repo <alias> when using --track '{track}' in multi-repo work '{slug}'"
+                ));
+            }
+        };
+
+        if let Some(existing) = state
+            .repos
+            .iter()
+            .find(|r| r.alias == target_alias && r.track.as_deref() == Some(track))
+        {
+            PathBuf::from(&existing.worktree_path)
+        } else {
+            let added = add_track_worktree(&cfg, &slug, &target_alias, Some(track), None)?;
+            PathBuf::from(&added.worktree_path)
+        }
+    } else if let Some(alias) = cwd_repo {
         let repo = state
             .repos
             .iter()
-            .find(|r| r.alias == alias)
+            .find(|r| r.alias == alias && r.track.is_none())
+            .or_else(|| state.repos.iter().find(|r| r.alias == alias))
             .ok_or_else(|| format!("Repo alias '{alias}' is not part of work '{slug}'"))?;
         PathBuf::from(&repo.worktree_path)
     } else {
@@ -353,6 +433,12 @@ fn cmd_spawn(
 
     let (status, first_sent, screen_preview) = evaluate_readiness(&herdr, &hc_info, task.is_some());
 
+    let tab_label = match tier {
+        SessionTier::Owner => "owner".to_string(),
+        SessionTier::Worker => format!("worker:{}", clean_domain.as_deref().unwrap_or("worker")),
+    };
+    let placement = herdr.wait_and_label_tab(&space_id, &hc_info.id, &hc_name, &tab_label);
+
     let now = WorkState::now_iso();
     let session = WorkSession {
         key: key.clone(),
@@ -362,8 +448,8 @@ fn cmd_spawn(
         cwd: cwd.to_string_lossy().to_string(),
         hc_terminal_id: Some(hc_info.id.clone()),
         hc_name: Some(hc_name),
-        herdr_tab_id: None,
-        herdr_pane_id: None,
+        herdr_tab_id: placement.as_ref().map(|p| p.tab_id.clone()),
+        herdr_pane_id: placement.as_ref().and_then(|p| p.pane_id.clone()),
         native_session_id: native_id,
         capture,
         status,
@@ -674,6 +760,12 @@ fn cmd_resume(raw_slug: &str, key: &str, explicit_id: Option<&str>) -> Result<St
     };
 
     let (new_status, _, screen_preview) = evaluate_readiness(&herdr, &hc_info, false);
+    let tab_label = match session.tier {
+        SessionTier::Owner => "owner".to_string(),
+        SessionTier::Worker => format!("worker:{}", session.domain.as_deref().unwrap_or("worker")),
+    };
+    let placement = herdr.wait_and_label_tab(&space_id, &hc_info.id, &hc_name, &tab_label);
+
     let capture_override = if explicit_id.is_some() {
         Some(CaptureState::Manual)
     } else if session.native_session_id.is_none() {
@@ -687,6 +779,8 @@ fn cmd_resume(raw_slug: &str, key: &str, explicit_id: Option<&str>) -> Result<St
         s.herdr_space_name = Some(slug.clone());
         if let Some(sess) = s.sessions.iter_mut().find(|x| x.key == key) {
             sess.hc_terminal_id = Some(hc_info.id.clone());
+            sess.herdr_tab_id = placement.as_ref().map(|p| p.tab_id.clone());
+            sess.herdr_pane_id = placement.as_ref().and_then(|p| p.pane_id.clone());
             sess.native_session_id = Some(native_id.clone());
             if let Some(cap) = capture_override.clone() {
                 sess.capture = cap;
