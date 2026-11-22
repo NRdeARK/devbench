@@ -1,59 +1,88 @@
 ---
 name: devbench
 description: >-
-  Orchestrate multi-repo works and persistent agent sessions on Herdr (herdr-core + herdr-app)
-  using the devbench CLI: Dispatcher -> Owner -> (domain) worker hierarchy, 1 work : 1 Herdr
-  workspace, central git worktree folders, native AI session ID tracking, live status
-  reconciliation, resume, and safe one-step archiving. Use when the user asks to start a new work,
-  spawn an Owner or domain worker, check work status, resume a session, or archive a finished work.
+  Activate Dispatcher mode for multi-repo work orchestration on Herdr (herdr-core + herdr-app)
+  using the devbench CLI. Use whenever the user says "be the dispatcher", "act as dispatcher",
+  "start dispatcher mode", "/devbench", or asks to inspect all works/states, start a new work,
+  spawn an Owner or domain worker, resume a session, or archive a finished work.
 ---
 
-# devbench — Dispatcher Guide
+# devbench — Dispatcher Mode Playbook
 
-`devbench` is a native Rust CLI that manages **persistent** work sessions in a 4-tier hierarchy:
+When this skill is activated, **you are the Dispatcher (Tier 1)** overseeing all works across repositories through the `devbench` CLI.
 
 ```text
-Dispatcher (you) -> Owner (1 per work, primary pane) -> domain worker(s) (tabs/splits in same space)
-                                                      \-> ephemeral sub-agents (decoupled; not managed by devbench)
+Dispatcher (you, Tier 1)
+  └─> Owner (Tier 2, 1 per work, primary pane in dedicated 1:1 Herdr workspace)
+        └─> domain worker(s) (Tier 3, optional persistent specialists in tabs/splits of same space)
+              └─> ephemeral sub-agents (Tier 4, decoupled — NOT managed by devbench)
 ```
 
-Each work maps **1-to-1** to:
-- One central work folder: `<work_root>/<slug>/` (holding git worktrees for each target repo + notes)
-- One dedicated Herdr workspace (`herdr.space=<space_id>`)
-- One central runtime state file: `~/.devbench/state/works/<slug>.json`
+---
 
-## Config & State Locations
+## Step 0 — Startup & State Gathering (Always run first when entering Dispatcher mode)
 
-- **User config (external-first):** `$DEVBENCH_CONFIG` -> `~/.devbench/config.json` (optional gitignored repo-local fallback in dev mode). Never edit files inside the plugin cache directory.
-- **Central work state:** `~/.devbench/state/works/<slug>.json` (or `$DEVBENCH_STATE_DIR/works/<slug>.json`). Always reconciled live against `herdr-core` (`hc`) and `herdr-app`.
+Before acting or answering about active work, gather live truth in two commands:
+
+1. **Verify config:**
+   ```sh
+   devbench config check
+   ```
+   - Config is external-first: `$DEVBENCH_CONFIG` -> `~/.devbench/config.json` (never edit files inside a plugin cache).
+   - If config does not exist yet, run `devbench init` and help the user fill in `work_root`, `archive_root`, and `repos` aliases before proceeding.
+
+2. **Gather & reconcile all work states:**
+   ```sh
+   devbench status
+   ```
+   - Reads the central index at `~/.devbench/state/works/<slug>.json` and reconciles every non-archived session against live `herdr-core` (`hc`).
+   - Summarize the current bench in a concise table for the user:
+     - Active works (slug, title, repos/branches, Owner & worker statuses: `running`, `idle`, `blocked`, `exited`, `lost`)
+     - Any `blocked` sessions needing human attention (run `hc read --lines 30 <terminal>` to show the prompt — never `--force`!)
+     - Recently archived works if relevant.
+   - Then ask what the user wants to start, inspect, resume, or archive.
+
+---
+
+## Dispatcher Operating Rules
+
+1. **Orchestrate, don't code in main checkouts:** Never edit source repositories directly as the Dispatcher. Spin up a work (`devbench new`) and delegate execution to an **Owner** (`devbench spawn --role owner`).
+2. **1 Work : 1 Herdr Workspace:** Each work maps 1-to-1 to `<work_root>/<slug>/` (git worktrees + notes) and one dedicated Herdr workspace (`herdr.space=<id>`).
+3. **Keep session lifetime clear (`--outlive-parent`):** `devbench spawn` uses `--outlive-parent` so active Owner/worker sessions survive if this Dispatcher tab restarts or closes. They are **not** zombies — closing a pane/space in Herdr or running `devbench archive` kills and cleans them up.
+4. **Never blind-resend on trust prompts:** If `spawn` returns `status: "blocked"` (`first_message_sent: false`), display `screen_preview` to the user and wait for them to approve the prompt. Never pass `--force`.
+5. **Confirm before archiving:** Always confirm with the user before calling `devbench archive <slug>`. Dirty/untracked worktrees block archive safely by default; offer `--snapshot-wip` (commits WIP to task branches) instead of forcing deletion.
+
+---
 
 ## Core Commands
 
 ```sh
-# 1. Initialize or validate user config from templates/config.example.json
+# Initialize or validate external user config (~/.devbench/config.json)
 devbench init
 devbench config check
 
-# 2. Setup a new multi-repo workspace (preflights all repos before creating anything)
+# Create a central multi-repo work folder + git worktrees + central state
 devbench new <slug> --repos api,web --title "Implement auth token refresh"
 
-# 3. Launch Owner (primary pane) or domain worker (tab/split in same 1:1 space)
-devbench spawn <slug> --role owner --agent claude --cwd-repo api --task "Own auth refresh across api and web..."
-devbench spawn <slug> --role worker --domain web --agent codex --cwd-repo web --task "Update login client..."
+# Launch persistent Owner (primary pane) or domain worker (tab/split in same 1:1 space)
+devbench spawn <slug> --role owner --agent claude --cwd-repo api --task "<exact goal, repos, and reporting instructions>"
+devbench spawn <slug> --role worker --domain web --agent codex --cwd-repo web --task "<exact domain scope>"
 
-# 4. Inspect all works (reconciled against live Herdr) or bind/resume a session
+# Inspect all works (live reconciled) or one work
 devbench status
 devbench status <slug>
+
+# Bind or resume a native AI session ID (rechecks central state; launches in saved cwd)
 devbench bind <slug> --key owner --session-id <native-id>
 devbench resume <slug> --key owner [--session-id <native-id>]
 
-# 5. Archive a completed work (only after user confirms)
+# Archive a completed work (closes 1:1 Herdr space first, detaches clean worktrees, keeps branches)
 devbench archive <slug> [--snapshot-wip]
 ```
 
-## Safety Rules
+## Owner Brief Template (when spawning an Owner)
 
-1. **Herdr lifetime (`--outlive-parent`):** `devbench spawn` passes `--outlive-parent` so active Owner/worker sessions survive when you close or restart the Dispatcher tab. They are **not** zombies: closing their pane/space in Herdr or running `devbench archive` kills and cleans them up.
-2. **Never blind-resend on trust prompts:** If `devbench spawn` reports `status: blocked` (`first_message.sent = false`), run `hc read <terminal>` and ask the user to resolve the prompt. Never pass `--force`.
-3. **Archive confirmation:** Always get user confirmation before running `devbench archive`. Dirty/untracked worktrees block archive by default; offer `--snapshot-wip` instead of force-deleting.
-4. **Native AI session IDs are `cwd`-scoped and machine-local:** `devbench resume` automatically launches from the session's recorded `cwd` and rechecks the saved ID (or uses `--session-id` if passed).
+Include these details in `--task` so the Owner knows its Tier 2 role:
+- Exact goal and definition of done.
+- Target repo worktree paths inside `<work_root>/<slug>/`.
+- Reminder to follow the `devbench-owner` conventions: stay inside worktrees, spawn persistent domain workers only inside this same work slug if needed, and report back when done or blocked via `hc send <dispatcher_terminal_id> "<summary>"`.
