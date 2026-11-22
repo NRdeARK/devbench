@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="devbench logo">
+  <rect width="128" height="128" rx="24" fill="#141413"/>
+  <rect x="20" y="24" width="88" height="24" rx="6" fill="#D97757"/>
+  <rect x="20" y="58" width="40" height="46" rx="6" fill="#CFE4F5" stroke="#1F6FA8" stroke-width="2"/>
+  <rect x="68" y="58" width="40" height="20" rx="5" fill="#FAF9F5"/>
+  <rect x="68" y="84" width="40" height="20" rx="5" fill="#FAF9F5" opacity="0.72"/>
+  <circle cx="34" cy="36" r="4" fill="#FAF9F5"/>
+  <circle cx="48" cy="36" r="4" fill="#FAF9F5" opacity="0.75"/>
+</svg>

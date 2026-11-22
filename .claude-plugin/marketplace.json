@@ -1,0 +1,16 @@
+{
+  "name": "devbench",
+  "metadata": {
+    "description": "Multi-agent workspace and session orchestrator (Dispatcher -> Owner -> domain worker) on Herdr + git worktrees."
+  },
+  "owner": {
+    "name": "NRdeARK",
+    "url": "https://github.com/NRdeARK"
+  },
+  "plugins": [
+    {
+      "name": "devbench",
+      "source": "./"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "devbench",
+  "description": "Multi-agent workspace and session orchestrator built on herdr-core (hc) and herdr-app: Dispatcher -> Owner -> (domain) worker hierarchy, central multi-repo git worktree folders, 1:1 Herdr workspaces, persistent native AI session ID tracking, and safe one-step archiving.",
+  "version": "0.1.0",
+  "logo": "assets/logo.svg",
+  "author": {
+    "name": "NRdeARK",
+    "url": "https://github.com/NRdeARK"
+  },
+  "homepage": "https://github.com/NRdeARK/devbench",
+  "repository": "https://github.com/NRdeARK/devbench",
+  "license": "MIT"
+}

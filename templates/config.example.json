@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "work_root": "~/work",
+  "archive_root": "~/work-archive",
+  "branch_prefix": "devbench/",
+  "default_agent": "claude",
+  "repos": {
+    "api": {
+      "path": "~/projects/api",
+      "base_ref": "origin/main"
+    },
+    "web": {
+      "path": "~/projects/web",
+      "base_ref": "origin/main"
+    }
+  },
+  "agents": {
+    "claude": {
+      "argv": ["claude"],
+      "resume_argv": ["claude", "--resume", "{session_id}"],
+      "capture": "preassign"
+    },
+    "codex": {
+      "argv": ["codex", "--no-daemon"],
+      "resume_argv": ["codex", "resume", "{session_id}"],
+      "capture": "scan"
+    },
+    "agy": {
+      "argv": ["agy"],
+      "resume_argv": null,
+      "capture": "manual"
+    }
+  },
+  "herdr": {
+    "name_prefix": "db",
+    "focus_on_create": false,
+    "worker_layout": "tab",
+    "hc_bin": null,
+    "app_bin": null
+  },
+  "archive": {
+    "on_dirty": "block",
+    "warn_unpushed": true,
+    "snapshot_wip": false
+  }
+}

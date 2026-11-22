@@ -1,0 +1,15 @@
+# Build outputs
+/target/
+*.exe
+*.pdb
+
+# Local user config & runtime state (dev-mode fallback only; never commit personal paths)
+config.json
+*.local.json
+.devbench/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
