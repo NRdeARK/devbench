@@ -420,19 +420,7 @@ fn cmd_spawn(
         Ok(info) => info,
         Err(err) => {
             if created_space {
-                // Forget the space only once it is really closed, so archive can still clean it up.
-                match herdr.space_close(&space_id) {
-                    Ok(()) => {
-                        let _ = mutate_work(&slug, |s| {
-                            s.herdr_space_id = None;
-                            s.herdr_space_initial_terminal = None;
-                            Ok((true, ()))
-                        });
-                    }
-                    Err(e) => eprintln!(
-                        "warning: could not close space {space_id} after failed launch (kept in state for archive): {e}"
-                    ),
-                }
+                rollback_created_space(&herdr, &slug, &space_id, new_space_initial.as_deref());
             }
             return Err(format!("Failed to launch {hc_name} via herdr-core: {err}"));
         }
@@ -448,14 +436,12 @@ fn cmd_spawn(
         SessionTier::Worker => format!("worker:{}", clean_domain.as_deref().unwrap_or("worker")),
     };
     let placement = herdr.wait_and_label_tab(&space_id, &hc_info.id, &hc_name, &tab_label);
-    let initial_retired = retire_initial_tab(
-        &herdr,
-        &space_id,
-        new_space_initial
-            .as_deref()
-            .or(state.herdr_space_initial_terminal.as_deref()),
-        &hc_info.id,
-    );
+    let target_initial = if created_space {
+        new_space_initial.as_deref()
+    } else {
+        state.herdr_space_initial_terminal.as_deref()
+    };
+    let initial_retired = retire_initial_tab(&herdr, &space_id, target_initial, &hc_info.id);
 
     let now = WorkState::now_iso();
     let session = WorkSession {
@@ -479,7 +465,7 @@ fn cmd_spawn(
     let _ = mutate_work(&slug, |s| {
         s.herdr_space_id = Some(space_id.clone());
         s.herdr_space_name = Some(slug.clone());
-        if initial_retired {
+        if initial_retired && s.herdr_space_initial_terminal.as_deref() == target_initial {
             s.herdr_space_initial_terminal = None;
         }
         s.upsert_session(session.clone());
@@ -494,6 +480,48 @@ fn cmd_spawn(
         "screen_preview": screen_preview,
     }))
     .unwrap())
+}
+
+/// Close a freshly created space after a failed launch, clearing state fields only when cleanup
+/// succeeded so `devbench archive` can still clean up anything left behind.
+fn rollback_created_space(
+    herdr: &HerdrClient,
+    slug: &str,
+    space_id: &str,
+    initial_terminal_id: Option<&str>,
+) {
+    match herdr.space_close(space_id) {
+        Ok(()) => {
+            let init_cleaned = match initial_terminal_id {
+                Some(init_tid) => match herdr.hc_kill_and_rm(init_tid) {
+                    Ok(()) => true,
+                    Err(e) => {
+                        eprintln!(
+                            "warning: could not remove initial terminal {init_tid} after failed launch (kept in state for archive): {e}"
+                        );
+                        false
+                    }
+                },
+                None => true,
+            };
+            let _ = mutate_work(slug, |s| {
+                if s.herdr_space_id.as_deref() == Some(space_id) {
+                    s.herdr_space_id = None;
+                    if init_cleaned
+                        && s.herdr_space_initial_terminal.as_deref() == initial_terminal_id
+                    {
+                        s.herdr_space_initial_terminal = None;
+                    }
+                    Ok((true, ()))
+                } else {
+                    Ok((false, ()))
+                }
+            });
+        }
+        Err(e) => eprintln!(
+            "warning: could not close space {space_id} after failed launch (kept in state for archive): {e}"
+        ),
+    }
 }
 
 /// Retire the blank `shell` tab of a work's space so it holds only agent tabs (see
@@ -527,8 +555,12 @@ fn retire_recorded_initial(herdr: &HerdrClient, slug: &str, state: &WorkState, a
     };
     if retire_initial_tab(herdr, space_id, Some(initial), agent_terminal_id) {
         let _ = mutate_work(slug, |s| {
-            s.herdr_space_initial_terminal = None;
-            Ok((true, ()))
+            if s.herdr_space_initial_terminal.as_deref() == Some(initial) {
+                s.herdr_space_initial_terminal = None;
+                Ok((true, ()))
+            } else {
+                Ok((false, ()))
+            }
         });
     }
 }
@@ -809,19 +841,7 @@ fn cmd_resume(raw_slug: &str, key: &str, explicit_id: Option<&str>) -> Result<St
         Ok(info) => info,
         Err(err) => {
             if created_space {
-                // Forget the space only once it is really closed, so archive can still clean it up.
-                match herdr.space_close(&space_id) {
-                    Ok(()) => {
-                        let _ = mutate_work(&slug, |s| {
-                            s.herdr_space_id = None;
-                            s.herdr_space_initial_terminal = None;
-                            Ok((true, ()))
-                        });
-                    }
-                    Err(e) => eprintln!(
-                        "warning: could not close space {space_id} after failed launch (kept in state for archive): {e}"
-                    ),
-                }
+                rollback_created_space(&herdr, &slug, &space_id, new_space_initial.as_deref());
             }
             return Err(format!("Failed to resume {hc_name} via herdr-core: {err}"));
         }
@@ -833,14 +853,12 @@ fn cmd_resume(raw_slug: &str, key: &str, explicit_id: Option<&str>) -> Result<St
         SessionTier::Worker => format!("worker:{}", session.domain.as_deref().unwrap_or("worker")),
     };
     let placement = herdr.wait_and_label_tab(&space_id, &hc_info.id, &hc_name, &tab_label);
-    let initial_retired = retire_initial_tab(
-        &herdr,
-        &space_id,
-        new_space_initial
-            .as_deref()
-            .or(state.herdr_space_initial_terminal.as_deref()),
-        &hc_info.id,
-    );
+    let target_initial = if created_space {
+        new_space_initial.as_deref()
+    } else {
+        state.herdr_space_initial_terminal.as_deref()
+    };
+    let initial_retired = retire_initial_tab(&herdr, &space_id, target_initial, &hc_info.id);
 
     let capture_override = if explicit_id.is_some() {
         Some(CaptureState::Manual)
@@ -853,7 +871,7 @@ fn cmd_resume(raw_slug: &str, key: &str, explicit_id: Option<&str>) -> Result<St
     let _ = mutate_work(&slug, |s| {
         s.herdr_space_id = Some(space_id.clone());
         s.herdr_space_name = Some(slug.clone());
-        if initial_retired {
+        if initial_retired && s.herdr_space_initial_terminal.as_deref() == target_initial {
             s.herdr_space_initial_terminal = None;
         }
         if let Some(sess) = s.sessions.iter_mut().find(|x| x.key == key) {

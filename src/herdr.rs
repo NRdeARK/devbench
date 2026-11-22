@@ -204,12 +204,14 @@ impl HerdrClient {
         Ok(())
     }
 
-    /// Tab of `terminal_id` inside `space_id` only (exact terminal id; no name or cross-space fallback).
-    pub fn terminal_tab_in_space(
+    /// Locate tabs for `agent_terminal_id` and `initial_terminal_id` inside `space_id` from a
+    /// single `herdr-app ls` snapshot (exact terminal ids; no name or cross-space fallback).
+    fn terminal_tabs_in_space(
         &self,
         space_id: &str,
-        terminal_id: &str,
-    ) -> Result<Option<String>, String> {
+        agent_terminal_id: &str,
+        initial_terminal_id: &str,
+    ) -> Result<(Option<String>, Option<String>), String> {
         let out = run_cmd(&self.app_bin, &["ls"])?;
         let val: Value = serde_json::from_str(&out)
             .map_err(|e| format!("Unexpected JSON from herdr-app ls: {e}"))?;
@@ -218,25 +220,30 @@ impl HerdrClient {
             .and_then(|s| s.as_array())
             .or_else(|| val.as_array())
         else {
-            return Ok(None);
+            return Ok((None, None));
         };
         let Some(space) = spaces.iter().find(|s| {
             s.get("id").or_else(|| s.get("space")).and_then(|v| v.as_str()) == Some(space_id)
         }) else {
-            return Ok(None);
+            return Ok((None, None));
         };
+        let mut agent_tab = None;
+        let mut initial_tab = None;
         for tab in space.get("tabs").and_then(|t| t.as_array()).into_iter().flatten() {
-            let has_terminal = tab
-                .get("terminals")
-                .and_then(|t| t.as_array())
-                .into_iter()
-                .flatten()
-                .any(|t| t.get("terminal").and_then(|v| v.as_str()) == Some(terminal_id));
-            if has_terminal {
-                return Ok(tab.get("id").and_then(|v| v.as_str()).map(String::from));
+            let Some(tab_id) = tab.get("id").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            for term in tab.get("terminals").and_then(|t| t.as_array()).into_iter().flatten() {
+                match term.get("terminal").and_then(|v| v.as_str()) {
+                    Some(tid) if tid == agent_terminal_id => agent_tab = Some(tab_id.to_string()),
+                    Some(tid) if tid == initial_terminal_id => {
+                        initial_tab = Some(tab_id.to_string())
+                    }
+                    _ => {}
+                }
             }
         }
-        Ok(None)
+        Ok((agent_tab, initial_tab))
     }
 
     /// Retire the blank `shell` tab Herdr creates with a new space, once the agent terminal has
@@ -251,10 +258,15 @@ impl HerdrClient {
         initial_terminal_id: &str,
         agent_terminal_id: &str,
     ) -> Result<bool, String> {
-        let Some(agent_tab) = self.terminal_tab_in_space(space_id, agent_terminal_id)? else {
+        if initial_terminal_id == agent_terminal_id {
+            return Ok(false);
+        }
+        let (agent_tab, initial_tab) =
+            self.terminal_tabs_in_space(space_id, agent_terminal_id, initial_terminal_id)?;
+        let Some(agent_tab) = agent_tab else {
             return Ok(false);
         };
-        if let Some(initial_tab) = self.terminal_tab_in_space(space_id, initial_terminal_id)? {
+        if let Some(initial_tab) = initial_tab {
             if initial_tab == agent_tab {
                 return Ok(false);
             }

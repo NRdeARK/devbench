@@ -476,3 +476,20 @@ fn e2e_cleanup_failure_is_retried_by_reuse_spawn() {
     assert!(env.run(&["spawn", "rm-fails", "--role", "owner"], &[]).status.success());
     assert!(!env.read_log().iter().any(|a| a.first().map(|s| s.as_str()) == Some("rm")));
 }
+
+#[test]
+fn e2e_archive_warns_when_unretired_initial_terminal_cleanup_fails() {
+    let env = TestEnv::new();
+    assert!(env.run(&["new", "arch-warn", "--repos", "api"], &[]).status.success());
+    env.set_script(serde_json::json!({ "fail_hc_rm": true }));
+    assert!(env.run(&["spawn", "arch-warn", "--role", "owner"], &[]).status.success());
+
+    let arch = env.run(&["archive", "arch-warn"], &[]);
+    assert!(arch.status.success(), "{}", String::from_utf8_lossy(&arch.stderr));
+    let arch_json: Value = serde_json::from_slice(&arch.stdout).unwrap();
+    let warnings = arch_json["warnings"].as_array().unwrap();
+    assert!(warnings
+        .iter()
+        .filter_map(|v| v.as_str())
+        .any(|w| w.contains("hc cleanup for initial terminal")));
+}

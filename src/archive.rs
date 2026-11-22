@@ -144,7 +144,9 @@ pub fn archive_work(
                 }
             }
             if let Some(init_tid) = state.herdr_space_initial_terminal.clone() {
-                let _ = herdr.hc_kill_and_rm(&init_tid);
+                if let Err(e) = herdr.hc_kill_and_rm(&init_tid) {
+                    warnings.push(format!("hc cleanup for initial terminal '{init_tid}' warned: {e}"));
+                }
             }
             let session_tids: Vec<String> = state
                 .sessions
