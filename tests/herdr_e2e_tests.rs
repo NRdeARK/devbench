@@ -607,6 +607,21 @@ fn e2e_failed_launch_and_rm_cleaned_on_retry_then_archive() {
         .to_string();
     assert!(env.fake_terminal_ids().contains(&stale_tid));
 
+    // If stale cleanup fails again on retry, spawn aborts before creating a replacement space
+    // and keeps the retained initial terminal ID tracked so it cannot be orphaned.
+    env.set_script(serde_json::json!({ "fail_hc_rm": true }));
+    env.clear_log();
+    let sp_retry_fail = env.run(&["spawn", "retry-clean", "--role", "owner"], &[]);
+    assert!(!sp_retry_fail.status.success());
+    assert!(
+        !env.read_log().iter().any(|a| a.len() >= 2 && a[1] == "space.new"),
+        "must not create a replacement space when cleaning up previous initial terminal fails"
+    );
+    assert_eq!(
+        env.work_state("retry-clean")["herdr_space_initial_terminal"].as_str(),
+        Some(stale_tid.as_str())
+    );
+
     // Retry succeeds: retained `stale_tid` is cleaned up before replacing `herdr_space_initial_terminal`,
     // and the new space's initial terminal is also retired.
     env.set_script(serde_json::json!({}));
