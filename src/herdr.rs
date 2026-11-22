@@ -24,6 +24,13 @@ pub struct TerminalPlacement {
 }
 
 #[derive(Debug, Clone)]
+struct InitialTabLocation {
+    tab_id: String,
+    pane_id: Option<String>,
+    sole_occupant: bool,
+}
+
+#[derive(Debug, Clone)]
 pub struct HcTerminalInfo {
     pub id: String,
     pub live: bool,
@@ -204,14 +211,27 @@ impl HerdrClient {
         Ok(())
     }
 
-    /// Locate tabs for `agent_terminal_id` and `initial_terminal_id` inside `space_id` from a
-    /// single `herdr-app ls` snapshot (exact terminal ids; no name or cross-space fallback).
+    /// Close a pane via `herdr-app do pane.close {pane}` (ends only that pane's terminal).
+    pub fn pane_close(&self, pane_id: &str) -> Result<(), String> {
+        let payload = serde_json::json!({ "pane": pane_id });
+        let out = run_cmd(&self.app_bin, &["do", "pane.close", &payload.to_string()])?;
+        if let Ok(val) = serde_json::from_str::<Value>(&out) {
+            if let Some(err) = val.get("error").and_then(|v| v.as_str()) {
+                return Err(format!("herdr-app pane.close error: {err}"));
+            }
+        }
+        Ok(())
+    }
+
+    /// Locate `agent_terminal_id`'s tab and `initial_terminal_id`'s tab/pane/occupancy inside
+    /// `space_id` from a single `herdr-app ls` snapshot (exact terminal ids; no name or
+    /// cross-space fallback).
     fn terminal_tabs_in_space(
         &self,
         space_id: &str,
         agent_terminal_id: &str,
         initial_terminal_id: &str,
-    ) -> Result<(Option<String>, Option<String>), String> {
+    ) -> Result<(Option<String>, Option<InitialTabLocation>), String> {
         let out = run_cmd(&self.app_bin, &["ls"])?;
         let val: Value = serde_json::from_str(&out)
             .map_err(|e| format!("Unexpected JSON from herdr-app ls: {e}"))?;
@@ -228,30 +248,44 @@ impl HerdrClient {
             return Ok((None, None));
         };
         let mut agent_tab = None;
-        let mut initial_tab = None;
+        let mut initial_loc = None;
         for tab in space.get("tabs").and_then(|t| t.as_array()).into_iter().flatten() {
             let Some(tab_id) = tab.get("id").and_then(|v| v.as_str()) else {
                 continue;
             };
-            for term in tab.get("terminals").and_then(|t| t.as_array()).into_iter().flatten() {
+            let terminals = tab
+                .get("terminals")
+                .and_then(|t| t.as_array())
+                .map(Vec::as_slice)
+                .unwrap_or(&[]);
+            for term in terminals {
                 match term.get("terminal").and_then(|v| v.as_str()) {
                     Some(tid) if tid == agent_terminal_id => agent_tab = Some(tab_id.to_string()),
                     Some(tid) if tid == initial_terminal_id => {
-                        initial_tab = Some(tab_id.to_string())
+                        initial_loc = Some(InitialTabLocation {
+                            tab_id: tab_id.to_string(),
+                            pane_id: term
+                                .get("pane")
+                                .and_then(|v| v.as_str())
+                                .map(String::from),
+                            sole_occupant: terminals.len() == 1,
+                        });
                     }
                     _ => {}
                 }
             }
         }
-        Ok((agent_tab, initial_tab))
+        Ok((agent_tab, initial_loc))
     }
 
-    /// Retire the blank `shell` tab Herdr creates with a new space, once the agent terminal has
-    /// its own tab in the same space (so the space can never be emptied). Idempotent: if the tab is
-    /// already gone, only the leftover hc terminal record is cleaned. Returns `Ok(true)` when the
-    /// initial terminal is fully cleaned up (caller may forget it), `Ok(false)` when the agent is
-    /// not (yet) confirmed in the space or shares the initial tab, and `Err` when cleanup failed
-    /// (caller keeps the id so a later spawn/resume or archive can retry).
+    /// Retire the blank `shell` tab Herdr creates with a new space, once the agent terminal is
+    /// confirmed in the same space (so the space can never be emptied). If the initial tab was
+    /// split and holds other terminals, closes only the initial terminal's pane (never `tab.close`)
+    /// so unrelated terminals are never killed. Idempotent: if the tab is already gone, only the
+    /// leftover hc terminal record is cleaned. Returns `Ok(true)` when the initial terminal is
+    /// fully cleaned up (caller may forget it), `Ok(false)` when it cannot be safely retired yet,
+    /// and `Err` when cleanup failed (caller keeps the id so a later spawn/resume or archive can
+    /// retry).
     pub fn retire_initial_terminal(
         &self,
         space_id: &str,
@@ -261,18 +295,25 @@ impl HerdrClient {
         if initial_terminal_id == agent_terminal_id {
             return Ok(false);
         }
-        let (agent_tab, initial_tab) =
+        let (agent_tab, initial_loc) =
             self.terminal_tabs_in_space(space_id, agent_terminal_id, initial_terminal_id)?;
         let Some(agent_tab) = agent_tab else {
             return Ok(false);
         };
-        if let Some(initial_tab) = initial_tab {
-            if initial_tab == agent_tab {
+        if let Some(loc) = initial_loc {
+            if loc.sole_occupant {
+                if loc.tab_id == agent_tab {
+                    return Ok(false);
+                }
+                self.tab_close(&loc.tab_id)?;
+            } else if let Some(pane_id) = loc.pane_id {
+                self.pane_close(&pane_id)?;
+            } else {
+                // Split tab with unknown pane id: preserve the tab rather than risking unrelated terminals.
                 return Ok(false);
             }
-            self.tab_close(&initial_tab)?;
         }
-        // tab.close ends the terminal; drop its hc record (not-found/finished are tolerated).
+        // tab.close / pane.close ends the terminal; drop its hc record (not-found/finished are tolerated).
         self.hc_kill_and_rm(initial_terminal_id)?;
         Ok(true)
     }

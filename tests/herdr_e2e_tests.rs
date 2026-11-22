@@ -118,6 +118,25 @@ impl TestEnv {
             .unwrap_or_default()
     }
 
+    /// All terminal IDs currently tracked in fake `hc` state.
+    fn fake_terminal_ids(&self) -> Vec<String> {
+        let v: Value = serde_json::from_str(&fs::read_to_string(&self.fake_state).unwrap()).unwrap();
+        v["terminals"]
+            .as_object()
+            .map(|m| {
+                m.values()
+                    .filter_map(|t| t["id"].as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Read persisted central work state JSON.
+    fn work_state(&self, slug: &str) -> Value {
+        let path = self.state_dir.join("works").join(format!("{slug}.json"));
+        serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap()
+    }
+
     fn run(&self, args: &[&str], extra_env: &[(&str, &str)]) -> std::process::Output {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_devbench"));
         cmd.args(args)
@@ -379,11 +398,16 @@ fn e2e_spawn_and_resume_leave_only_agent_tabs() {
     let env = TestEnv::new();
     assert!(env.run(&["new", "one-tab", "--repos", "api"], &[]).status.success());
 
-    // Spawn owner: the blank "shell" tab is closed, only the owner tab remains.
+    // Spawn owner: the blank "shell" tab is closed, only the owner tab and terminal remain,
+    // and persisted state forgets `herdr_space_initial_terminal`.
     env.clear_log();
     let sp = env.run(&["spawn", "one-tab", "--role", "owner"], &[]);
     assert!(sp.status.success(), "{}", String::from_utf8_lossy(&sp.stderr));
+    let sp_json: Value = serde_json::from_slice(&sp.stdout).unwrap();
+    let owner_tid = sp_json["session"]["hc_terminal_id"].as_str().unwrap().to_string();
     assert_eq!(env.tab_names("s1"), vec!["owner"]);
+    assert_eq!(env.fake_terminal_ids(), vec![owner_tid.clone()]);
+    assert!(env.work_state("one-tab")["herdr_space_initial_terminal"].is_null());
     let log = env.read_log();
     let close_idx = log
         .iter()
@@ -399,17 +423,23 @@ fn e2e_spawn_and_resume_leave_only_agent_tabs() {
     assert_eq!(env.tab_names("s1"), vec!["owner", "worker:web"]);
     assert!(!env.read_log().iter().any(|a| a.len() >= 2 && a[1] == "tab.close"));
 
-    // Resume after the whole space and terminals vanished: recreated space ends with one tab.
+    // Resume after the whole space and terminals vanished: recreated space ends with one tab
+    // and only the resumed agent terminal record.
     let mut fs_val: Value = serde_json::from_str(&fs::read_to_string(&env.fake_state).unwrap()).unwrap();
     fs_val["spaces"] = serde_json::json!({});
     fs_val["terminals"] = serde_json::json!({});
     fs::write(&env.fake_state, serde_json::to_string_pretty(&fs_val).unwrap()).unwrap();
     let res = env.run(&["resume", "one-tab", "--key", "owner"], &[]);
     assert!(res.status.success(), "{}", String::from_utf8_lossy(&res.stderr));
+    let res_json: Value = serde_json::from_slice(&res.stdout).unwrap();
+    let resumed_tid = res_json["hc_terminal_id"].as_str().unwrap().to_string();
     assert_eq!(env.tab_names("s2"), vec!["owner"]);
+    assert_eq!(env.fake_terminal_ids(), vec![resumed_tid]);
+    assert!(env.work_state("one-tab")["herdr_space_initial_terminal"].is_null());
 
     // Archive after retirement still succeeds (initial terminal no longer tracked).
     assert!(env.run(&["archive", "one-tab"], &[]).status.success());
+    assert!(env.fake_terminal_ids().is_empty());
 }
 
 #[test]
@@ -492,4 +522,106 @@ fn e2e_archive_warns_when_unretired_initial_terminal_cleanup_fails() {
         .iter()
         .filter_map(|v| v.as_str())
         .any(|w| w.contains("hc cleanup for initial terminal")));
+}
+
+#[test]
+fn e2e_split_initial_tab_preserves_unrelated_terminal() {
+    let env = TestEnv::new();
+    assert!(env.run(&["new", "split-tab", "--repos", "api"], &[]).status.success());
+
+    // First spawn leaves the initial tab intact so we can simulate a user splitting it.
+    env.set_script(serde_json::json!({ "fail_tab_close": true }));
+    let sp = env.run(&["spawn", "split-tab", "--role", "owner"], &[]);
+    assert!(sp.status.success(), "{}", String::from_utf8_lossy(&sp.stderr));
+    assert_eq!(env.tab_names("s1"), vec!["shell", "owner"]);
+    let init_tid = env.work_state("split-tab")["herdr_space_initial_terminal"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // Inject an unrelated user terminal `t99` into the initial `shell` tab (simulating pane.split).
+    let mut fs_val: Value = serde_json::from_str(&fs::read_to_string(&env.fake_state).unwrap()).unwrap();
+    fs_val["spaces"]["s1"]["tabs"][0]["terminals"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!({
+            "terminal": "t99",
+            "pane": "p99",
+            "name": "user-shell"
+        }));
+    fs_val["terminals"]["user-shell"] = serde_json::json!({
+        "id": "t99",
+        "name": "user-shell",
+        "state": "live",
+        "status": "idle",
+        "labels": { "herdr.space": "s1" },
+        "first_message_sent": true,
+        "first_message_reason": null
+    });
+    fs::write(&env.fake_state, serde_json::to_string_pretty(&fs_val).unwrap()).unwrap();
+
+    // Retry via reuse spawn: must close ONLY the owned initial pane (`pane.close`), never `tab.close`,
+    // and must keep the unrelated `t99` terminal live in both the tab and hc state!
+    env.set_script(serde_json::json!({}));
+    env.clear_log();
+    let again = env.run(&["spawn", "split-tab", "--role", "owner"], &[]);
+    assert!(again.status.success(), "{}", String::from_utf8_lossy(&again.stderr));
+    let log = env.read_log();
+    assert!(
+        !log.iter().any(|a| a.len() >= 2 && a[1] == "tab.close"),
+        "must never call tab.close on a split initial tab"
+    );
+    assert!(
+        log.iter().any(|a| a.len() >= 2 && a[1] == "pane.close"),
+        "must close only the owned initial pane"
+    );
+
+    let after: Value = serde_json::from_str(&fs::read_to_string(&env.fake_state).unwrap()).unwrap();
+    assert_eq!(env.tab_names("s1"), vec!["shell", "owner"]);
+    let shell_terms = after["spaces"]["s1"]["tabs"][0]["terminals"].as_array().unwrap();
+    assert_eq!(shell_terms.len(), 1);
+    assert_eq!(shell_terms[0]["terminal"], "t99");
+    assert_eq!(after["terminals"]["user-shell"]["state"], "live");
+    assert!(
+        !env.fake_terminal_ids().contains(&init_tid),
+        "initial terminal record should be removed"
+    );
+    assert!(env.work_state("split-tab")["herdr_space_initial_terminal"].is_null());
+}
+
+#[test]
+fn e2e_failed_launch_and_rm_cleaned_on_retry_then_archive() {
+    let env = TestEnv::new();
+    assert!(env.run(&["new", "retry-clean", "--repos", "api"], &[]).status.success());
+
+    // Launch fails and rollback's `hc rm` of initial terminal also fails -> space closed,
+    // `herdr_space_id` cleared, but initial terminal ID retained for cleanup.
+    env.set_script(serde_json::json!({ "fail_hc_run": true, "fail_hc_rm": true }));
+    let sp1 = env.run(&["spawn", "retry-clean", "--role", "owner"], &[]);
+    assert!(!sp1.status.success());
+    let st1 = env.work_state("retry-clean");
+    assert!(st1["herdr_space_id"].is_null());
+    let stale_tid = st1["herdr_space_initial_terminal"]
+        .as_str()
+        .expect("retained initial terminal ID after failed rm")
+        .to_string();
+    assert!(env.fake_terminal_ids().contains(&stale_tid));
+
+    // Retry succeeds: retained `stale_tid` is cleaned up before replacing `herdr_space_initial_terminal`,
+    // and the new space's initial terminal is also retired.
+    env.set_script(serde_json::json!({}));
+    let sp2 = env.run(&["spawn", "retry-clean", "--role", "owner"], &[]);
+    assert!(sp2.status.success(), "{}", String::from_utf8_lossy(&sp2.stderr));
+    let sp2_json: Value = serde_json::from_slice(&sp2.stdout).unwrap();
+    let owner_tid = sp2_json["session"]["hc_terminal_id"].as_str().unwrap().to_string();
+    assert_eq!(env.tab_names("s2"), vec!["owner"]);
+    assert_eq!(env.fake_terminal_ids(), vec![owner_tid]);
+    assert!(env.work_state("retry-clean")["herdr_space_initial_terminal"].is_null());
+
+    // Archive finishes cleanly with zero warnings and zero leftover terminals.
+    let arch = env.run(&["archive", "retry-clean"], &[]);
+    assert!(arch.status.success(), "{}", String::from_utf8_lossy(&arch.stderr));
+    let arch_json: Value = serde_json::from_slice(&arch.stdout).unwrap();
+    assert!(arch_json["warnings"].as_array().unwrap().is_empty());
+    assert!(env.fake_terminal_ids().is_empty());
 }

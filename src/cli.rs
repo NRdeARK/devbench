@@ -387,6 +387,7 @@ fn cmd_spawn(
     let space_id = match state.herdr_space_id.clone() {
         Some(existing) if herdr.space_exists(&existing).unwrap_or(true) => existing,
         _ => {
+            cleanup_stale_initial_terminal(&herdr, state.herdr_space_initial_terminal.as_deref());
             let created = herdr.space_new(
                 &slug,
                 &PathBuf::from(&state.work_dir),
@@ -480,6 +481,18 @@ fn cmd_spawn(
         "screen_preview": screen_preview,
     }))
     .unwrap())
+}
+
+/// Before creating a replacement space, clean up any retained initial terminal ID from a prior
+/// failed cleanup so overwriting `herdr_space_initial_terminal` does not strand its hc record.
+fn cleanup_stale_initial_terminal(herdr: &HerdrClient, stale_initial: Option<&str>) {
+    if let Some(tid) = stale_initial {
+        if let Err(e) = herdr.hc_kill_and_rm(tid) {
+            eprintln!(
+                "warning: could not clean up previous initial terminal {tid} before creating new space: {e}"
+            );
+        }
+    }
 }
 
 /// Close a freshly created space after a failed launch, clearing state fields only when cleanup
@@ -813,6 +826,7 @@ fn cmd_resume(raw_slug: &str, key: &str, explicit_id: Option<&str>) -> Result<St
     let space_id = match state.herdr_space_id.clone() {
         Some(sid) if herdr.space_exists(&sid).unwrap_or(false) => sid,
         _ => {
+            cleanup_stale_initial_terminal(&herdr, state.herdr_space_initial_terminal.as_deref());
             let created = herdr.space_new(
                 &slug,
                 &PathBuf::from(&state.work_dir),

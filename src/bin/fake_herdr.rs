@@ -182,6 +182,20 @@ fn handle_app_do(args: &[String], script: &Value, state: &mut FakeState) -> Exit
             let name = obj.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
             let folder = obj.get("folder").and_then(|v| v.as_str()).unwrap_or("").to_string();
             let tab_name = obj.get("tab").and_then(|v| v.as_str()).unwrap_or("1").to_string();
+            let mut labels = BTreeMap::new();
+            labels.insert("herdr.space".to_string(), sid.clone());
+            state.terminals.insert(
+                tid.clone(),
+                FakeTerm {
+                    id: tid.clone(),
+                    name: tid.clone(),
+                    state: "live".to_string(),
+                    status: "idle".to_string(),
+                    labels,
+                    first_message_sent: true,
+                    first_message_reason: None,
+                },
+            );
             state.spaces.insert(
                 sid.clone(),
                 FakeSpace {
@@ -252,13 +266,62 @@ fn handle_app_do(args: &[String], script: &Value, state: &mut FakeState) -> Exit
                 return ExitCode::from(1);
             };
             let space = state.spaces.get_mut(&sid).unwrap();
+            let closed_tids: Vec<String> = space
+                .tabs
+                .iter()
+                .filter(|t| t.id == id)
+                .flat_map(|t| t.terminals.iter().map(|tt| tt.terminal.clone()))
+                .collect();
             space.tabs.retain(|t| t.id != id);
             // Like the real app: closing a space's last tab closes the space.
             if space.tabs.is_empty() {
                 state.spaces.remove(&sid);
             }
+            for tid in closed_tids {
+                mark_terminal_finished(state, &tid);
+            }
             save_state(state);
             println!("{}", json!({"closed": id}));
+            ExitCode::SUCCESS
+        }
+        "pane.close" => {
+            for k in obj.keys() {
+                if k != "pane" {
+                    eprintln!("{{\"error\":\"unknown argument '{k}' for pane.close\"}}");
+                    return ExitCode::from(1);
+                }
+            }
+            let Some(pane_id) = obj.get("pane").and_then(|v| v.as_str()) else {
+                eprintln!("{{\"error\":\"missing required argument 'pane'\"}}");
+                return ExitCode::from(1);
+            };
+            let mut closed_tid = None;
+            let mut empty_space = None;
+            for (sid, space) in &mut state.spaces {
+                for tab in &mut space.tabs {
+                    if let Some(pos) = tab.terminals.iter().position(|tt| tt.pane == pane_id) {
+                        closed_tid = Some(tab.terminals.remove(pos).terminal);
+                        break;
+                    }
+                }
+                if closed_tid.is_some() {
+                    space.tabs.retain(|t| !t.terminals.is_empty());
+                    if space.tabs.is_empty() {
+                        empty_space = Some(sid.clone());
+                    }
+                    break;
+                }
+            }
+            let Some(tid) = closed_tid else {
+                eprintln!("{{\"error\":\"pane not found\"}}");
+                return ExitCode::from(1);
+            };
+            if let Some(sid) = empty_space {
+                state.spaces.remove(&sid);
+            }
+            mark_terminal_finished(state, &tid);
+            save_state(state);
+            println!("{}", json!({"closed": pane_id}));
             ExitCode::SUCCESS
         }
         "space.close" => {
@@ -277,7 +340,13 @@ fn handle_app_do(args: &[String], script: &Value, state: &mut FakeState) -> Exit
                 eprintln!("{{\"error\":\"space not found\"}}");
                 return ExitCode::from(1);
             }
-            state.spaces.remove(id);
+            if let Some(space) = state.spaces.remove(id) {
+                for tab in space.tabs {
+                    for tt in tab.terminals {
+                        mark_terminal_finished(state, &tt.terminal);
+                    }
+                }
+            }
             save_state(state);
             println!("{}", json!({"closed": id}));
             ExitCode::SUCCESS
@@ -430,6 +499,20 @@ fn handle_hc_get(args: &[String], script: &Value, state: &FakeState) -> ExitCode
     ExitCode::SUCCESS
 }
 
+fn mark_terminal_finished(state: &mut FakeState, tid: &str) {
+    let key = state
+        .terminals
+        .iter()
+        .find(|(k, v)| *k == tid || v.id == tid)
+        .map(|(k, _)| k.clone());
+    if let Some(k) = key {
+        if let Some(t) = state.terminals.get_mut(&k) {
+            t.state = "finished".to_string();
+            t.status = "done".to_string();
+        }
+    }
+}
+
 fn handle_hc_kill(args: &[String], state: &mut FakeState) -> ExitCode {
     let Some(target) = args.first() else {
         return ExitCode::from(2);
@@ -441,6 +524,9 @@ fn handle_hc_kill(args: &[String], state: &mut FakeState) -> ExitCode {
         .map(|(k, _)| k.clone());
     if let Some(k) = key {
         if let Some(t) = state.terminals.get_mut(&k) {
+            if t.state == "finished" {
+                return ExitCode::from(11);
+            }
             t.state = "finished".to_string();
             t.status = "done".to_string();
         }
