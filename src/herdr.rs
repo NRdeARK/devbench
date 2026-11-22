@@ -204,24 +204,64 @@ impl HerdrClient {
         Ok(())
     }
 
-    /// Close the blank `shell` tab Herdr creates with a new space, once an agent tab exists.
-    /// Never closes `agent_tab_id` (that would empty the space). Returns `Ok(true)` if a tab was
-    /// closed, `Ok(false)` if there was nothing to close (already gone, or same tab as the agent).
-    pub fn close_initial_tab(
+    /// Tab of `terminal_id` inside `space_id` only (exact terminal id; no name or cross-space fallback).
+    pub fn terminal_tab_in_space(
+        &self,
+        space_id: &str,
+        terminal_id: &str,
+    ) -> Result<Option<String>, String> {
+        let out = run_cmd(&self.app_bin, &["ls"])?;
+        let val: Value = serde_json::from_str(&out)
+            .map_err(|e| format!("Unexpected JSON from herdr-app ls: {e}"))?;
+        let Some(spaces) = val
+            .get("spaces")
+            .and_then(|s| s.as_array())
+            .or_else(|| val.as_array())
+        else {
+            return Ok(None);
+        };
+        let Some(space) = spaces.iter().find(|s| {
+            s.get("id").or_else(|| s.get("space")).and_then(|v| v.as_str()) == Some(space_id)
+        }) else {
+            return Ok(None);
+        };
+        for tab in space.get("tabs").and_then(|t| t.as_array()).into_iter().flatten() {
+            let has_terminal = tab
+                .get("terminals")
+                .and_then(|t| t.as_array())
+                .into_iter()
+                .flatten()
+                .any(|t| t.get("terminal").and_then(|v| v.as_str()) == Some(terminal_id));
+            if has_terminal {
+                return Ok(tab.get("id").and_then(|v| v.as_str()).map(String::from));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Retire the blank `shell` tab Herdr creates with a new space, once the agent terminal has
+    /// its own tab in the same space (so the space can never be emptied). Idempotent: if the tab is
+    /// already gone, only the leftover hc terminal record is cleaned. Returns `Ok(true)` when the
+    /// initial terminal is fully cleaned up (caller may forget it), `Ok(false)` when the agent is
+    /// not (yet) confirmed in the space or shares the initial tab, and `Err` when cleanup failed
+    /// (caller keeps the id so a later spawn/resume or archive can retry).
+    pub fn retire_initial_terminal(
         &self,
         space_id: &str,
         initial_terminal_id: &str,
-        agent_tab_id: &str,
+        agent_terminal_id: &str,
     ) -> Result<bool, String> {
-        let Some(initial) = self.find_terminal_placement(space_id, initial_terminal_id, "")? else {
+        let Some(agent_tab) = self.terminal_tab_in_space(space_id, agent_terminal_id)? else {
             return Ok(false);
         };
-        if initial.tab_id == agent_tab_id {
-            return Ok(false);
+        if let Some(initial_tab) = self.terminal_tab_in_space(space_id, initial_terminal_id)? {
+            if initial_tab == agent_tab {
+                return Ok(false);
+            }
+            self.tab_close(&initial_tab)?;
         }
-        self.tab_close(&initial.tab_id)?;
-        // tab.close ends the terminal; drop its hc record too (not-found/finished tolerated).
-        let _ = self.hc_kill_and_rm(initial_terminal_id);
+        // tab.close ends the terminal; drop its hc record (not-found/finished are tolerated).
+        self.hc_kill_and_rm(initial_terminal_id)?;
         Ok(true)
     }
 

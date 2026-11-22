@@ -420,6 +420,36 @@ fn e2e_tab_close_failure_does_not_fail_spawn() {
     let sp = env.run(&["spawn", "close-fails", "--role", "owner"], &[]);
     assert!(sp.status.success(), "{}", String::from_utf8_lossy(&sp.stderr));
     assert!(String::from_utf8_lossy(&sp.stderr).contains("could not close blank shell tab"));
-    // Blank tab is left (warned), agent tab still present.
+    // Blank tab is left for now (warned), agent tab present.
     assert_eq!(env.tab_names("s1"), vec!["shell", "owner"]);
+
+    // The next spawn retries the retirement and succeeds.
+    env.set_script(serde_json::json!({}));
+    let sp_w = env.run(&["spawn", "close-fails", "--role", "worker", "--domain", "web"], &[]);
+    assert!(sp_w.status.success(), "{}", String::from_utf8_lossy(&sp_w.stderr));
+    assert_eq!(env.tab_names("s1"), vec!["owner", "worker:web"]);
+
+    // Once retired it is forgotten: a further spawn closes nothing.
+    env.clear_log();
+    let sp_x = env.run(&["spawn", "close-fails", "--role", "worker", "--domain", "api"], &[]);
+    assert!(sp_x.status.success());
+    assert!(!env.read_log().iter().any(|a| a.len() >= 2 && a[1] == "tab.close"));
+}
+
+#[test]
+fn e2e_failed_resume_launch_closes_recreated_space() {
+    let env = TestEnv::new();
+    assert!(env.run(&["new", "resume-fails", "--repos", "api"], &[]).status.success());
+    assert!(env.run(&["spawn", "resume-fails", "--role", "owner"], &[]).status.success());
+
+    // Space + terminals vanish; the relaunch fails: no empty/broken space may be left behind.
+    let mut fs_val: Value = serde_json::from_str(&fs::read_to_string(&env.fake_state).unwrap()).unwrap();
+    fs_val["spaces"] = serde_json::json!({});
+    fs_val["terminals"] = serde_json::json!({});
+    fs::write(&env.fake_state, serde_json::to_string_pretty(&fs_val).unwrap()).unwrap();
+    env.set_script(serde_json::json!({ "fail_hc_run": true }));
+    let res = env.run(&["resume", "resume-fails", "--key", "owner"], &[]);
+    assert!(!res.status.success());
+    let after: Value = serde_json::from_str(&fs::read_to_string(&env.fake_state).unwrap()).unwrap();
+    assert!(after["spaces"].as_object().unwrap().is_empty());
 }
