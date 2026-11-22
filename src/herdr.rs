@@ -431,7 +431,15 @@ impl HerdrClient {
         let _ = Command::new(&self.hc_bin)
             .args(["wait", target, "--timeout", "3"])
             .output();
-        let _ = Command::new(&self.hc_bin).args(["rm", target]).output();
+        let rm_out = Command::new(&self.hc_bin)
+            .args(["rm", target])
+            .output()
+            .map_err(|e| format!("Failed to invoke hc rm {target}: {e}"))?;
+        // Exit 3 (not_found) means it is already gone.
+        if !rm_out.status.success() && rm_out.status.code() != Some(3) {
+            let stderr = String::from_utf8_lossy(&rm_out.stderr).trim().to_string();
+            return Err(format!("hc rm {target} failed: {stderr}"));
+        }
         Ok(())
     }
 }

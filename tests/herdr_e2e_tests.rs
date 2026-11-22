@@ -453,3 +453,26 @@ fn e2e_failed_resume_launch_closes_recreated_space() {
     let after: Value = serde_json::from_str(&fs::read_to_string(&env.fake_state).unwrap()).unwrap();
     assert!(after["spaces"].as_object().unwrap().is_empty());
 }
+
+#[test]
+fn e2e_cleanup_failure_is_retried_by_reuse_spawn() {
+    let env = TestEnv::new();
+    assert!(env.run(&["new", "rm-fails", "--repos", "api"], &[]).status.success());
+
+    // hc rm of the initial terminal fails: tab is closed but the id must stay recorded.
+    env.set_script(serde_json::json!({ "fail_hc_rm": true }));
+    let sp = env.run(&["spawn", "rm-fails", "--role", "owner"], &[]);
+    assert!(sp.status.success(), "{}", String::from_utf8_lossy(&sp.stderr));
+    assert!(String::from_utf8_lossy(&sp.stderr).contains("could not close blank shell tab"));
+    assert_eq!(env.tab_names("s1"), vec!["owner"]);
+
+    // Re-running the same spawn (reuse path) retries cleanup and then forgets the id.
+    env.set_script(serde_json::json!({}));
+    env.clear_log();
+    let again = env.run(&["spawn", "rm-fails", "--role", "owner"], &[]);
+    assert!(again.status.success());
+    assert!(env.read_log().iter().any(|a| a.first().map(|s| s.as_str()) == Some("rm")));
+    env.clear_log();
+    assert!(env.run(&["spawn", "rm-fails", "--role", "owner"], &[]).status.success());
+    assert!(!env.read_log().iter().any(|a| a.first().map(|s| s.as_str()) == Some("rm")));
+}

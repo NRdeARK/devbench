@@ -352,6 +352,7 @@ fn cmd_spawn(
             };
             if space_matches {
                 let _ = herdr.agent_focus(&live_info.id);
+                retire_recorded_initial(&herdr, &slug, &state, &live_info.id);
                 // Ensure state records the reused terminal if missing
                 let _ = mutate_work(&slug, |s| {
                     if let Some(existing) = s.sessions.iter_mut().find(|sess| sess.key == key) {
@@ -513,6 +514,22 @@ fn retire_initial_tab(
             eprintln!("warning: could not close blank shell tab of space {space_id}: {e}");
             false
         }
+    }
+}
+
+/// Retry a previously failed blank-tab retirement for an already-live agent (reuse/reattach paths).
+fn retire_recorded_initial(herdr: &HerdrClient, slug: &str, state: &WorkState, agent_terminal_id: &str) {
+    let (Some(space_id), Some(initial)) = (
+        state.herdr_space_id.as_deref(),
+        state.herdr_space_initial_terminal.as_deref(),
+    ) else {
+        return;
+    };
+    if retire_initial_tab(herdr, space_id, Some(initial), agent_terminal_id) {
+        let _ = mutate_work(slug, |s| {
+            s.herdr_space_initial_terminal = None;
+            Ok((true, ()))
+        });
     }
 }
 
@@ -706,6 +723,7 @@ fn cmd_resume(raw_slug: &str, key: &str, explicit_id: Option<&str>) -> Result<St
                     ));
                 }
                 let _ = herdr.agent_focus(&info.id);
+                retire_recorded_initial(&herdr, &slug, &state, &info.id);
                 return Ok(serde_json::to_string_pretty(&json!({
                     "action": "reattached",
                     "slug": slug,

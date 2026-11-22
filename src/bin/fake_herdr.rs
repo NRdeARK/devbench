@@ -125,7 +125,13 @@ fn main() -> ExitCode {
         }
         "kill" => handle_hc_kill(&args[1..], &mut state),
         "wait" => ExitCode::SUCCESS,
-        "rm" => handle_hc_rm(&args[1..], &mut state),
+        "rm" => {
+            if script.get("fail_hc_rm").and_then(|v| v.as_bool()) == Some(true) {
+                eprintln!("simulated hc rm failure");
+                return ExitCode::from(5);
+            }
+            handle_hc_rm(&args[1..], &mut state)
+        }
         other => {
             eprintln!("fake_herdr: unknown subcommand '{other}'");
             ExitCode::from(2)
